@@ -1,0 +1,58 @@
+# === Secrets (NEVER commit) ===
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# === Python ===
+.venv/
+**/.venv/
+venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+**/.pytest_cache/
+*.egg-info/
+
+# === Node / Next.js ===
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+next-env.d.ts
+
+# === Data (large / licensed datasets — pulled via kagglehub, not committed) ===
+data/
+**/data/synthea_output/
+**/data/processed/
+*.csv
+
+# === Model artifacts & experiment stores (large / regenerable) ===
+*.joblib
+*.pkl
+# ...except the slimmed demo models that MUST ship to Vercel (small, no data):
+!site/api/models/
+!site/api/models/*.joblib
+*.h5
+*.onnx
+*.jar
+mlflow.db
+**/mlruns/
+**/feature_store/
+*.bak
+
+# === Local tooling / OS ===
+.claude/
+.DS_Store
+.ipynb_checkpoints/
+
+# === Deploy stack local state ===
+deploy/langfuse/.env

@@ -1,0 +1,7 @@
+.venv/
+.env
+__pycache__/
+*.pyc
+data/synthea_output/
+data/processed/
+.pytest_cache/

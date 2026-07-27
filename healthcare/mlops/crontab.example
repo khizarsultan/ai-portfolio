@@ -1,0 +1,16 @@
+# Healthcare MLOps — scheduled drift-triggered retraining.
+# Install with:  crontab crontab.example   (edit the ABS paths to match your machine)
+#
+# Every day at 02:00, draw a fresh production window, check drift, and — only if drift is
+# detected — train + evaluate a challenger. Promotion still requires a human (never cron).
+#
+# Use an absolute python and cd into the pipeline dir so relative paths resolve.
+
+MLOPS=/Users/khizar.sultan/Desktop/VD/portfolio/healthcare/mlops
+PY=/usr/bin/python3
+
+# daily drift-triggered retraining (leaves a challenger pending manual approval)
+0 2 * * *  cd $MLOPS && $PY pipeline.py run >> $MLOPS/state/cron.log 2>&1
+
+# weekly heartbeat: log registry status
+0 8 * * 1  cd $MLOPS && $PY pipeline.py status >> $MLOPS/state/cron.log 2>&1

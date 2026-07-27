@@ -1,0 +1,6 @@
+# Pinned to the versions the models were trained/pickled with (unpickle must match).
+scikit-learn==1.6.1
+numpy==2.0.2
+pandas==2.3.3
+scipy==1.17.1
+joblib==1.5.3
