@@ -111,6 +111,14 @@ CASES = [
 ]
 CASES_BY_ID = {c["id"]: c for c in CASES}
 
+# Prerecorded faithful runs (generated from this exact pipeline) — served as a fallback so the
+# page always shows a full pipeline even when the live NIM key/quota is unavailable.
+try:
+    with open(os.path.join(os.path.dirname(__file__), "pa_samples.json")) as _f:
+        SAMPLES = json.load(_f)
+except Exception:
+    SAMPLES = {}
+
 
 # --- compliance: Safe-Harbor redaction (from src/compliance/redact.py) ------
 _PATTERNS = [
@@ -514,6 +522,7 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self._send(200, {
             "live": bool(API_KEY),
+            "has_samples": bool(SAMPLES),
             "model": MODEL,
             "cases": [{"id": c["id"], "title": c["title"], "path": c["path"],
                        "plan": PLANS[c["plan_id"]]["name"], "plan_id": c["plan_id"],
@@ -531,18 +540,32 @@ class handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length) or "{}")
         except Exception:
             return self._send(400, {"error": "Invalid JSON body."})
-        case = CASES_BY_ID.get(body.get("case_id"))
+        case_id = body.get("case_id")
+        case = CASES_BY_ID.get(case_id)
         if not case:
             return self._send(400, {"error": "Unknown case_id. Pick one of the listed cases."})
+
+        def _sample(reason: str):
+            s = dict(SAMPLES[case_id])
+            s["sample"] = True
+            s["sample_reason"] = reason
+            return s
+
+        # No key configured -> serve the prerecorded run so the page still shows a full pipeline.
         if not API_KEY:
+            if case_id in SAMPLES:
+                return self._send(200, _sample("Prerecorded example — live LLM not configured."))
             return self._send(503, {
                 "error": "The live agent is not configured. Set NVIDIA_API_KEY in the Vercel "
                          "project environment variables to enable it."})
+
         t0 = time.time()
         try:
             result = run_case(dict(case))
-        except LLMError as e:
-            return self._send(502, {"error": f"LLM backend error: {e}"})
+        except LLMError:
+            if case_id in SAMPLES:  # key set but backend/quota failed -> graceful fallback
+                return self._send(200, _sample("Prerecorded example — live LLM was unavailable."))
+            return self._send(502, {"error": "LLM backend unavailable and no sample on file."})
         except Exception as e:
             return self._send(500, {"error": f"Pipeline error: {e}"})
         result["elapsed_ms"] = int((time.time() - t0) * 1000)

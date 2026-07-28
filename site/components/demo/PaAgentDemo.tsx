@@ -7,14 +7,14 @@ type CaseInfo = {
   order: { cpt: string; display: string }; notes: string;
   diagnoses: string[]; prior_treatments: string[];
 };
-type Meta = { live: boolean; model: string; cases: CaseInfo[]; agents: string[]; note: string };
+type Meta = { live: boolean; has_samples: boolean; model: string; cases: CaseInfo[]; agents: string[]; note: string };
 type Step = { agent: string; status: string; detail: string };
 type RunResult = {
   needs_pa: boolean | null; coverage_ok: boolean | null;
   decision: { outcome: string; reason: string } | null;
   status: string; steps: Step[]; audit_log: string[]; rationale: string;
   appeal_letter: string | null; redacted_view: Record<string, unknown>;
-  model: string; elapsed_ms: number;
+  model: string; elapsed_ms: number; sample?: boolean; sample_reason?: string;
 };
 
 const STATUS_STYLE: Record<string, { dot: string; text: string; ring: string }> = {
@@ -131,8 +131,8 @@ export default function PaAgentDemo() {
             {loading ? "Agents running…" : "Run agent flow"}
           </RunButton>
           {!meta.live && (
-            <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-              Live LLM not configured — set <code>NVIDIA_API_KEY</code> in the Vercel project to enable real runs.
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              Live LLM key not set — runs replay a <strong>prerecorded example</strong> of the same pipeline.
             </p>
           )}
           {loading && (
@@ -160,6 +160,12 @@ export default function PaAgentDemo() {
           >
             {done ? verdict.label : "Running pipeline…"}
           </div>
+        )}
+
+        {done && result?.sample && (
+          <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950/50">
+            {result.sample_reason || "Prerecorded example."} Structure and outcome match a real run of the pipeline.
+          </p>
         )}
 
         {result && (

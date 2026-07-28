@@ -5,7 +5,8 @@
   "functions": {
     "api/pa-agent.py": {
       "memory": 1024,
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": "api/pa_samples.json"
     },
     "api/*.py": {
       "memory": 1024,
