@@ -34,6 +34,7 @@ export const PROJECTS: Project[] = [
     ],
     stack: ["LangGraph", "LangChain", "NVIDIA NIM", "FastAPI", "React", "Langfuse", "Pydantic"],
     demoEnv: "NEXT_PUBLIC_DEMO_PA_AGENT",
+    demoPath: "/demos/prior-auth",
     featured: true,
   },
   {

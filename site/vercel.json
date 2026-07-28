@@ -3,6 +3,10 @@
   "framework": "nextjs",
   "buildCommand": "next build",
   "functions": {
+    "api/pa-agent.py": {
+      "memory": 1024,
+      "maxDuration": 60
+    },
     "api/*.py": {
       "memory": 1024,
       "maxDuration": 30,
