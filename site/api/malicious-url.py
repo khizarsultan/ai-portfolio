@@ -64,6 +64,53 @@ def _featurize(url):
     return F
 
 
+# Engineered numeric features, grouped for a readable "under the hood" view.
+_NUM_FEATURES = ["url_len", "host_len", "path_len", "n_dots", "n_hyphen", "n_digits",
+                 "n_slash", "n_special", "n_subdomains", "digit_ratio", "url_entropy"]
+_NUM_LABELS = {"url_len": "URL length", "host_len": "Host length", "path_len": "Path length",
+               "n_dots": "Dots (.)", "n_hyphen": "Hyphens (-)", "n_digits": "Digits",
+               "n_slash": "Slashes (/)", "n_special": "Special chars", "n_subdomains": "Subdomains",
+               "digit_ratio": "Digit ratio", "url_entropy": "Char entropy"}
+
+
+def _stages(url, F, Xt, proba, classes, pred, flags):
+    """Real intermediate values at each step of the pipeline — the 'glass box' view."""
+    f0 = F.iloc[0]
+    host, path = _host(url), _path(url)
+    dense = Xt.toarray()[0] if hasattr(Xt, "toarray") else np.asarray(Xt).ravel()
+    num = [{"label": _NUM_LABELS[k],
+            "value": round(float(f0[k]), 3) if k in ("digit_ratio", "url_entropy") else int(f0[k])}
+           for k in _NUM_FEATURES]
+    top = sorted(_ART["global_importance"], key=lambda d: -d["importance"])[:6]
+    pmax = max(proba)
+    return [
+        {"key": "input", "title": "Raw input", "summary": "The URL as typed", "kind": "kv",
+         "data": [{"label": "URL", "value": url}, {"label": "Host", "value": host or "—"},
+                  {"label": "Path", "value": path or "/"}]},
+        {"key": "features", "title": "Feature engineering",
+         "summary": f"{len(_NUM_FEATURES)} lexical features from the raw string", "kind": "kv",
+         "data": num},
+        {"key": "flags", "title": "Lexical signals", "summary": "Binary red/green flags",
+         "kind": "flags", "data": flags},
+        {"key": "preprocess", "title": "Preprocessing",
+         "summary": f"Scaled + one-hot encoded → {len(dense)}-dim vector", "kind": "vector",
+         "data": {"dims": len(dense), "values": [round(float(x), 3) for x in dense[:16]],
+                  "note": "Numeric features standardized; scheme + TLD one-hot encoded. First 16 dims shown."}},
+        {"key": "model", "title": "Model", "summary": _ART["model_name"], "kind": "kv",
+         "data": [{"label": "Algorithm", "value": _ART["model_name"]},
+                  {"label": "Task", "value": "4-class classification"},
+                  {"label": "Input dims", "value": len(dense)},
+                  {"label": "Classes", "value": ", ".join(classes)}]},
+        {"key": "prediction", "title": "Prediction",
+         "summary": f"{pred} ({round(pmax * 100)}%)", "kind": "bars",
+         "data": [{"label": c, "value": round(float(p), 4), "active": c == pred}
+                  for c, p in zip(classes, proba)]},
+        {"key": "explain", "title": "Why", "summary": "Top signals the model relies on",
+         "kind": "importance",
+         "data": [{"label": d["feature"], "value": round(float(d["importance"]), 4)} for d in top]},
+    ]
+
+
 def predict(url):
     F = _featurize(url)
     Xt = _ART["preprocessor"].transform(F[list(_ART["input_cols"])])
@@ -81,6 +128,7 @@ def predict(url):
                      "n_subdomains": int(F["n_subdomains"].iloc[0]),
                      "url_entropy": round(float(F["url_entropy"].iloc[0]), 2)},
         "model_name": _ART["model_name"],
+        "stages": _stages(url, F, Xt, proba, classes, pred, flags),
     }
 
 

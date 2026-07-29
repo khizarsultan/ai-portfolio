@@ -1,6 +1,7 @@
 """Prior Authorization Agent — live multi-agent pipeline on a Vercel Python function.
 
-A faithful, self-contained port of healthcare/ai/src (LangGraph 5-agent system). No LangChain/
+A faithful, self-contained port of healthcare/ai/prior-authorization-agent/src (LangGraph
+5-agent system). No LangChain/
 LangGraph is bundled: the orchestration is plain Python and the LLM is reached over stdlib HTTPS
 to NVIDIA NIM's OpenAI-compatible endpoint — tiny cold start, well under the 250MB limit.
 
@@ -167,6 +168,45 @@ class LLMError(RuntimeError):
     pass
 
 
+def _as_text(v) -> str:
+    """Coerce any LLM field to a string. Small models sometimes return a dict/list where a
+    string was asked for (e.g. an appeal letter as {sentence: ""}). Flatten it safely so the
+    pipeline and the UI never receive a non-string."""
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        return v
+    if isinstance(v, dict):
+        parts = []
+        for k, val in v.items():
+            vs = _as_text(val)
+            parts.append(f"{k}: {vs}" if vs.strip() else str(k))
+        return "\n".join(parts)
+    if isinstance(v, (list, tuple)):
+        return "\n".join(_as_text(x) for x in v)
+    return str(v)
+
+
+def _truncate(v, n: int = 240) -> str:
+    s = _as_text(v)
+    return s if len(s) <= n else s[:n].rstrip() + "…"
+
+
+def _as_code_list(v) -> list:
+    """Coerce a codes/treatments field to a flat list of strings."""
+    if isinstance(v, (list, tuple)):
+        out = []
+        for x in v:
+            if isinstance(x, dict):            # e.g. {"code": "M23.2"} -> "M23.2"
+                x = x.get("code") or x.get("type") or next(iter(x.values()), "")
+            s = _as_text(x).strip()
+            if s:
+                out.append(s)
+        return out
+    s = _as_text(v).strip()
+    return [s] if s else []
+
+
 def _extract_json(text: str) -> dict:
     text = text.strip()
     if text.startswith("```"):
@@ -212,9 +252,10 @@ def _log(state: dict, agent: str, message: str) -> None:
     trail.append(f"[{len(trail) + 1:02d}] {agent}: {message}")
 
 
-def _step(state: dict, agent: str, status: str, detail: str) -> None:
-    """Structured record for the UI stepper (status: ok|approved|denied|needs_info|review|skip)."""
-    state["steps"].append({"agent": agent, "status": status, "detail": detail})
+def _step(state: dict, agent: str, status: str, detail: str, io: dict | None = None) -> None:
+    """Structured record for the UI stepper (status: ok|approved|denied|needs_info|review|skip).
+    `io` carries what the agent RECEIVED and RETURNED — the under-the-hood view."""
+    state["steps"].append({"agent": agent, "status": status, "detail": detail, "io": io or {}})
 
 
 def _requires_pa(plan_id: str, cpt: str) -> bool:
@@ -235,34 +276,41 @@ def agent_checker(state: dict) -> None:
     cpt = case["order"]["cpt"]
     needs = _requires_pa(case["plan_id"], cpt)
     state["needs_pa"] = needs                       # rule table is authoritative
+    io = {"in": {"plan": case["plan_id"], "cpt": f"{cpt} ({case['order']['display']})"},
+          "out": {"needs_pa": needs, "decided_by": "payer rule table (not the LLM)"}}
     if needs:
         _log(state, "Checker", f"CPT {cpt} under {case['plan_id']} requires prior authorization.")
-        _step(state, "Checker", "ok", "Prior authorization is required for this order.")
+        _step(state, "Checker", "ok", "Prior authorization is required for this order.", io)
     else:
         state["status"] = "done"
         _log(state, "Checker", f"CPT {cpt} under {case['plan_id']} does not require PA -> auto-cleared.")
-        _step(state, "Checker", "approved", "No prior authorization required — auto-cleared.")
+        _step(state, "Checker", "approved", "No prior authorization required — auto-cleared.", io)
 
 
 def agent_verifier(state: dict) -> None:
     case = state["case"]
+    cpt = case["order"]["cpt"]
     if not case["coverage_active"]:
         state["coverage_ok"] = False
         _log(state, "Verifier", "Member coverage is not active.")
-        _step(state, "Verifier", "review", "Coverage inactive — routed to human review.")
+        _step(state, "Verifier", "review", "Coverage inactive — routed to human review.",
+              {"in": {"coverage_active": False}, "out": {"coverage_ok": False, "route": "human_review"}})
         state["status"] = "human_review"
         return
-    covered = _is_covered(case["plan_id"], case["order"]["cpt"])
+    covered = _is_covered(case["plan_id"], cpt)
     state["coverage_ok"] = covered
+    io = {"in": {"plan": case["plan_id"], "cpt": cpt, "coverage_active": True},
+          "out": {"coverage_ok": covered, "covered_cpts": PLANS[case["plan_id"]]["covered_cpt"]}}
     if covered:
         _log(state, "Verifier", "Coverage active and procedure is a covered benefit.")
-        _step(state, "Verifier", "ok", "Coverage active; procedure is a covered benefit.")
+        _step(state, "Verifier", "ok", "Coverage active; procedure is a covered benefit.", io)
     else:
         plan = PLANS[case["plan_id"]]["name"]
+        io["out"]["route"] = "human_review"
         _log(state, "Verifier",
-             f"Procedure {case['order']['cpt']} is a non-covered benefit under {case['plan_id']}.")
+             f"Procedure {cpt} is a non-covered benefit under {case['plan_id']}.")
         _step(state, "Verifier", "review",
-              f"Non-covered benefit under {plan} — routed to human review.")
+              f"Non-covered benefit under {plan} — routed to human review.", io)
         state["status"] = "human_review"
 
 
@@ -291,9 +339,10 @@ def agent_assembler(state: dict) -> None:
     except LLMError as e:
         state["status"] = "human_review"
         _log(state, "Assembler", f"Could not assemble a valid packet ({e}) -> human review.")
-        _step(state, "Assembler", "review", "Packet assembly failed — routed to human review.")
+        _step(state, "Assembler", "review", "Packet assembly failed — routed to human review.",
+              {"in": {"llm": "invalid output"}, "out": {"route": "human_review"}})
         raise
-    dx_raw = [str(c) for c in out.get("diagnosis_codes", [])]
+    dx_raw = _as_code_list(out.get("diagnosis_codes"))
     dx = _guard(dx_raw)
     dropped = [c for c in dx_raw if c not in dx]
     if dropped:
@@ -303,9 +352,9 @@ def agent_assembler(state: dict) -> None:
         "patient_id": redact_case(case)["subject"],
         "order": case["order"],
         "diagnosis_codes": dx,
-        "prior_treatments": [str(t) for t in out.get("prior_treatments", [])],
-        "clinical_justification": out.get("clinical_justification", ""),
-        "attachments": [str(a) for a in out.get("attachments", [])],
+        "prior_treatments": _as_code_list(out.get("prior_treatments")),
+        "clinical_justification": _as_text(out.get("clinical_justification")),
+        "attachments": _as_code_list(out.get("attachments")),
     })
     state["packet"] = packet
     _log(state, "Assembler",
@@ -315,7 +364,15 @@ def agent_assembler(state: dict) -> None:
     detail += f"prior treatments {packet['prior_treatments'] or '[none]'}."
     if dropped:
         detail += f" Guard dropped invented code(s) {dropped}."
-    _step(state, "Assembler", "ok", detail)
+    rc = redact_case(case)
+    io = {"in": {"documented_diagnoses": rc["diagnoses"],
+                 "documented_prior_treatments": rc["prior_treatment_types"],
+                 "sees": "Safe-Harbor redacted case (LLM)"},
+          "out": {"diagnosis_codes": packet["diagnosis_codes"],
+                  "prior_treatments": packet["prior_treatments"],
+                  "clinical_justification": _truncate(packet["clinical_justification"]),
+                  "dropped_by_guard": dropped}}
+    _step(state, "Assembler", "ok", detail, io)
 
 
 def _payer_decide(packet: dict) -> dict:
@@ -342,14 +399,19 @@ def _payer_decide(packet: dict) -> dict:
 
 
 def agent_submitter(state: dict) -> str:
-    decision = _payer_decide(state["packet"])
+    packet = state["packet"]
+    decision = _payer_decide(packet)
     state["decision"] = decision
     outcome = decision["outcome"]
+    io_in = {"diagnosis_codes": packet["diagnosis_codes"], "prior_treatments": packet["prior_treatments"],
+             "has_justification": bool(packet["clinical_justification"].strip())}
     if outcome == "APPROVED":
         state["denial_reason"] = None
         state["status"] = "done"
         _log(state, "Submitter", f"Payer decision: APPROVED. {decision['reason']}")
-        _step(state, "Submitter", "approved", f"Payer APPROVED. {decision['reason']}")
+        _step(state, "Submitter", "approved", f"Payer APPROVED. {decision['reason']}",
+              {"in": io_in, "out": {"outcome": "APPROVED", "reason": decision["reason"],
+                                    "decided_by": "deterministic rules engine"}})
         return "APPROVED"
     state["denial_reason"] = decision["reason"]
     if outcome == "NEEDS_INFO":
@@ -360,12 +422,16 @@ def agent_submitter(state: dict) -> str:
         capped = state["appeal_loops"] > MAX_APPEAL_LOOPS
     _log(state, "Submitter", f"Payer decision: {outcome}. {decision['reason']}")
     _step(state, "Submitter", "needs_info" if outcome == "NEEDS_INFO" else "denied",
-          f"Payer {outcome}. {decision['reason']}")
+          f"Payer {outcome}. {decision['reason']}",
+          {"in": io_in, "out": {"outcome": outcome, "reason": decision["reason"],
+                                "missing": decision.get("missing", [])}})
     if capped:
         state["status"] = "human_review"
         _log(state, "Orchestrator", f"{outcome} loop cap reached -> routing to human review.")
         _step(state, "Orchestrator", "review",
-              f"{outcome} retry cap reached — escalated to a human reviewer.")
+              f"{outcome} retry cap reached — escalated to a human reviewer.",
+              {"in": {"needs_info_loops": state["needs_info_loops"], "appeal_loops": state["appeal_loops"]},
+               "out": {"route": "human_review", "reason": "no autonomous denial — human decides"}})
     return outcome
 
 
@@ -392,23 +458,29 @@ def agent_appealer(state: dict) -> None:
     except LLMError as e:
         state["status"] = "human_review"
         _log(state, "Appealer", f"Could not draft a valid appeal ({e}) -> human review.")
-        _step(state, "Appealer", "review", "Appeal drafting failed — routed to human review.")
+        _step(state, "Appealer", "review", "Appeal drafting failed — routed to human review.",
+              {"in": {"llm": "invalid output"}, "out": {"route": "human_review"}})
         raise
-    added_raw = [str(c) for c in out.get("added_diagnosis_codes", [])]
+    added_raw = _as_code_list(out.get("added_diagnosis_codes"))
     added_dx = _guard(added_raw)
     dropped = [c for c in added_raw if c not in added_dx]
     if dropped:
         _log(state, "Appealer", f"Hallucination guard: dropped unrecognised code(s) {dropped}.")
     packet["diagnosis_codes"] = sorted(set(packet["diagnosis_codes"]) | set(added_dx))
     packet["prior_treatments"] = sorted(
-        set(packet["prior_treatments"]) | {str(t) for t in out.get("added_prior_treatments", [])})
-    if out.get("updated_justification", "").strip():
-        packet["clinical_justification"] = out["updated_justification"]
-    packet["appeal_letter"] = out.get("appeal_letter", "")
+        set(packet["prior_treatments"]) | set(_as_code_list(out.get("added_prior_treatments"))))
+    updated = _as_text(out.get("updated_justification"))
+    if updated.strip():
+        packet["clinical_justification"] = updated
+    packet["appeal_letter"] = _as_text(out.get("appeal_letter"))
     state["packet"] = packet
     _log(state, "Appealer", f"Drafted appeal; added dx={added_dx}.")
     honest = " (no new evidence found in the record)" if not added_dx else ""
-    _step(state, "Appealer", "ok", f"Appeal drafted and resubmitted{honest}.")
+    _step(state, "Appealer", "ok", f"Appeal drafted and resubmitted{honest}.",
+          {"in": {"denial_reason": state.get("denial_reason", ""),
+                  "sees": "Safe-Harbor redacted case (LLM)"},
+           "out": {"added_diagnosis_codes": added_dx,
+                   "appeal_letter": _truncate(packet.get("appeal_letter"))}})
 
 
 # --- plain-English rationale (from src/governance/explain.py) ----------------

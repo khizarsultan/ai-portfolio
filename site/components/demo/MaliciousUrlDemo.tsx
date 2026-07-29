@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { postJSON, getJSON, Card, Label, TextInput, RunButton, ErrorNote, DevHint, Verdict } from "./ui";
+import StageFlow, { Stage } from "./StageFlow";
 
 type Meta = { classes: string[]; examples: Record<string, string[]>; model_name: string };
 type Result = {
@@ -8,6 +9,7 @@ type Result = {
   probabilities: Record<string, number>;
   flags: { key: string; label: string; on: boolean }[];
   features: { url_len: number; host_len: number; n_subdomains: number; url_entropy: number };
+  stages?: Stage[];
 };
 
 const CLASS_COLOR: Record<string, string> = {
@@ -94,6 +96,16 @@ export default function MaliciousUrlDemo() {
             </dl>
           </Card>
         </div>
+      )}
+
+      {res?.stages && (
+        <Card>
+          <h2 className="mb-1 text-lg font-semibold">Under the hood</h2>
+          <p className="mb-4 text-sm text-slate-500">
+            The real pipeline, step by step — click any stage to see the actual values.
+          </p>
+          <StageFlow stages={res.stages} />
+        </Card>
       )}
     </div>
   );

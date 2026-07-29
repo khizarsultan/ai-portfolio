@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Card, RunButton, ErrorNote, DevHint, getJSON, postJSON } from "./ui";
+import AgentFlowGraph from "./AgentFlowGraph";
 
 type CaseInfo = {
   id: string; title: string; path: string; plan: string; plan_id: string;
@@ -8,7 +9,8 @@ type CaseInfo = {
   diagnoses: string[]; prior_treatments: string[];
 };
 type Meta = { live: boolean; has_samples: boolean; model: string; cases: CaseInfo[]; agents: string[]; note: string };
-type Step = { agent: string; status: string; detail: string };
+type IO = { in?: Record<string, unknown>; out?: Record<string, unknown> };
+type Step = { agent: string; status: string; detail: string; io?: IO };
 type RunResult = {
   needs_pa: boolean | null; coverage_ok: boolean | null;
   decision: { outcome: string; reason: string } | null;
@@ -42,6 +44,7 @@ export default function PaAgentDemo() {
   const [visible, setVisible] = useState(0);
   const [showAudit, setShowAudit] = useState(false);
   const [showRedacted, setShowRedacted] = useState(false);
+  const [openStep, setOpenStep] = useState<number | null>(null);
 
   useEffect(() => {
     getJSON<Meta>("/api/pa-agent")
@@ -65,7 +68,7 @@ export default function PaAgentDemo() {
   async function run() {
     if (!selected) return;
     setLoading(true); setError(undefined); setResult(null);
-    setShowAudit(false); setShowRedacted(false);
+    setShowAudit(false); setShowRedacted(false); setOpenStep(null);
     try {
       setResult(await postJSON<RunResult>("/api/pa-agent", { case_id: selected }));
     } catch (e) {
@@ -170,23 +173,57 @@ export default function PaAgentDemo() {
 
         {result && (
           <Card>
+            <h2 className="text-sm font-semibold text-slate-500">Architecture &amp; routing</h2>
+            <p className="mt-1 text-xs text-slate-400">The agent graph; the path taken on this run is highlighted. Click a node to jump to its step.</p>
+            <div className="mt-3">
+              <AgentFlowGraph
+                steps={result.steps} status={result.status} decision={result.decision}
+                needsPa={result.needs_pa} coverageOk={result.coverage_ok} revealCount={visible}
+                onPick={(agent) => {
+                  const idx = result.steps.findIndex((s) => s.agent === agent);
+                  if (idx >= 0) setOpenStep(idx);
+                }}
+              />
+            </div>
+          </Card>
+        )}
+
+        {result && (
+          <Card>
             <h2 className="text-sm font-semibold text-slate-500">Agent pipeline</h2>
-            <ol className="mt-4 space-y-3">
+            <p className="mt-1 text-xs text-slate-400">Click a step to see what that agent received and returned.</p>
+            <ol className="mt-4 space-y-2">
               {result.steps.slice(0, visible).map((s, i) => {
                 const st = STATUS_STYLE[s.status] ?? STATUS_STYLE.ok;
+                const hasIO = !!(s.io && (s.io.in || s.io.out));
+                const open = openStep === i;
                 return (
-                  <li key={i} className="flex gap-3">
-                    <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ring-4 ${st.dot} ${st.ring}`} />
-                    <div>
-                      <div className={`text-sm font-semibold ${st.text}`}>{s.agent}</div>
-                      <div className="text-sm text-slate-600 dark:text-slate-300">{s.detail}</div>
-                    </div>
+                  <li key={i}>
+                    <button
+                      onClick={() => hasIO && setOpenStep(open ? null : i)}
+                      className={`flex w-full gap-3 rounded-lg px-2 py-1 text-left ${hasIO ? "hover:bg-slate-50 dark:hover:bg-slate-800/50" : "cursor-default"}`}
+                    >
+                      <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ring-4 ${st.dot} ${st.ring}`} />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm font-semibold ${st.text}`}>{s.agent}</span>
+                          {hasIO && <span className="text-[11px] text-slate-400">{open ? "▾ hide I/O" : "▸ I/O"}</span>}
+                        </div>
+                        <div className="text-sm text-slate-600 dark:text-slate-300">{asText(s.detail)}</div>
+                      </div>
+                    </button>
+                    {open && hasIO && (
+                      <div className="ml-7 mt-1 grid gap-2 sm:grid-cols-2">
+                        <IOBlock title="Received" data={s.io!.in} />
+                        <IOBlock title="Returned" data={s.io!.out} />
+                      </div>
+                    )}
                   </li>
                 );
               })}
               {visible < result.steps.length && (
-                <li className="flex gap-3">
-                  <span className="mt-1 h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-slate-300 dark:bg-slate-600" />
+                <li className="flex gap-3 px-2">
+                  <span className="mt-1.5 h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-slate-300 dark:bg-slate-600" />
                   <div className="text-sm text-slate-400">…</div>
                 </li>
               )}
@@ -198,13 +235,13 @@ export default function PaAgentDemo() {
           <>
             <Card>
               <h2 className="text-sm font-semibold text-slate-500">Plain-English rationale</h2>
-              <pre className="mt-2 whitespace-pre-wrap font-sans text-sm text-slate-700 dark:text-slate-200">{result.rationale}</pre>
+              <pre className="mt-2 whitespace-pre-wrap font-sans text-sm text-slate-700 dark:text-slate-200">{asText(result.rationale)}</pre>
             </Card>
 
             {result.appeal_letter && (
               <Card>
                 <h2 className="text-sm font-semibold text-slate-500">Appeal letter (drafted by the Appealer)</h2>
-                <pre className="mt-2 max-h-72 overflow-y-auto whitespace-pre-wrap font-sans text-sm text-slate-700 dark:text-slate-200">{result.appeal_letter}</pre>
+                <pre className="mt-2 max-h-72 overflow-y-auto whitespace-pre-wrap font-sans text-sm text-slate-700 dark:text-slate-200">{asText(result.appeal_letter)}</pre>
               </Card>
             )}
 
@@ -250,6 +287,41 @@ export default function PaAgentDemo() {
           </Card>
         )}
       </div>
+    </div>
+  );
+}
+
+// Backstop: never hand a non-string to a React child. Flattens any dict/list an LLM field
+// might contain (the server also coerces, this guards against anything slipping through).
+function asText(v: unknown): string {
+  if (v == null) return "";
+  if (typeof v === "string") return v;
+  if (Array.isArray(v)) return v.map(asText).join("\n");
+  if (typeof v === "object")
+    return Object.entries(v as Record<string, unknown>)
+      .map(([k, val]) => { const s = asText(val); return s.trim() ? `${k}: ${s}` : k; })
+      .join("\n");
+  return String(v);
+}
+
+// Small panel showing an agent's inputs or outputs (the under-the-hood I/O).
+function IOBlock({ title, data }: { title: string; data?: Record<string, unknown> }) {
+  const entries = data ? Object.entries(data) : [];
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-950/40">
+      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{title}</div>
+      {entries.length === 0 ? (
+        <div className="text-xs text-slate-400">—</div>
+      ) : (
+        <dl className="space-y-1">
+          {entries.map(([k, v]) => (
+            <div key={k} className="text-xs">
+              <dt className="text-slate-400">{k}</dt>
+              <dd className="whitespace-pre-wrap break-words font-mono text-slate-700 dark:text-slate-200">{asText(v)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </div>
   );
 }

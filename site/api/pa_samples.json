@@ -17,7 +17,17 @@
    {
     "agent": "Checker",
     "status": "approved",
-    "detail": "No prior authorization required \u2014 auto-cleared."
+    "detail": "No prior authorization required \u2014 auto-cleared.",
+    "io": {
+     "in": {
+      "plan": "PLAN_A",
+      "cpt": "97110 (Physical therapy - therapeutic exercise)"
+     },
+     "out": {
+      "needs_pa": false,
+      "decided_by": "payer rule table (not the LLM)"
+     }
+    }
    }
   ],
   "audit_log": [
@@ -28,7 +38,7 @@
   "appeal_letter": null,
   "packet": null,
   "redacted_view": {
-   "subject": "PT-6407",
+   "subject": "PT-7814",
    "age_band": "40-64",
    "sex": "female",
    "plan_id": "PLAN_A",
@@ -67,22 +77,86 @@
    {
     "agent": "Checker",
     "status": "ok",
-    "detail": "Prior authorization is required for this order."
+    "detail": "Prior authorization is required for this order.",
+    "io": {
+     "in": {
+      "plan": "PLAN_A",
+      "cpt": "73721 (MRI knee without contrast)"
+     },
+     "out": {
+      "needs_pa": true,
+      "decided_by": "payer rule table (not the LLM)"
+     }
+    }
    },
    {
     "agent": "Verifier",
     "status": "ok",
-    "detail": "Coverage active; procedure is a covered benefit."
+    "detail": "Coverage active; procedure is a covered benefit.",
+    "io": {
+     "in": {
+      "plan": "PLAN_A",
+      "cpt": "73721",
+      "coverage_active": true
+     },
+     "out": {
+      "coverage_ok": true,
+      "covered_cpts": [
+       "73721",
+       "70551",
+       "74177",
+       "95810",
+       "97110"
+      ]
+     }
+    }
    },
    {
     "agent": "Assembler",
     "status": "ok",
-    "detail": "Packet built \u2014 diagnoses ['M23.2'], prior treatments ['conservative_treatment']."
+    "detail": "Packet built \u2014 diagnoses ['M23.2'], prior treatments ['conservative_treatment'].",
+    "io": {
+     "in": {
+      "documented_diagnoses": [
+       "M23.2"
+      ],
+      "documented_prior_treatments": [
+       "conservative_treatment"
+      ],
+      "sees": "Safe-Harbor redacted case (LLM)"
+     },
+     "out": {
+      "diagnosis_codes": [
+       "M23.2"
+      ],
+      "prior_treatments": [
+       "conservative_treatment"
+      ],
+      "clinical_justification": "Patient presents with persistent mechanical knee pain and locking consistent with meniscal derangement (M23.2), unresponsive to a documented 6-week trial of conservative management (NSAIDs and physical therapy). MRI of the knee is indicated\u2026",
+      "dropped_by_guard": []
+     }
+    }
    },
    {
     "agent": "Submitter",
     "status": "approved",
-    "detail": "Payer APPROVED. All medical-necessity criteria met for MRI knee without contrast."
+    "detail": "Payer APPROVED. All medical-necessity criteria met for MRI knee without contrast.",
+    "io": {
+     "in": {
+      "diagnosis_codes": [
+       "M23.2"
+      ],
+      "prior_treatments": [
+       "conservative_treatment"
+      ],
+      "has_justification": true
+     },
+     "out": {
+      "outcome": "APPROVED",
+      "reason": "All medical-necessity criteria met for MRI knee without contrast.",
+      "decided_by": "deterministic rules engine"
+     }
+    }
    }
   ],
   "audit_log": [
@@ -95,7 +169,7 @@
   "rationale": "Prior-authorization rationale for order 73721 (MRI knee without contrast) under plan PLAN_A:\n- Prior authorization IS required for this procedure under the plan.\n- Coverage is active and the procedure is a covered benefit.\n- Payer decision: APPROVED \u2014 All medical-necessity criteria met for MRI knee without contrast.\n- OUTCOME: approved and complete.",
   "appeal_letter": null,
   "packet": {
-   "patient_id": "PT-2655",
+   "patient_id": "PT-1835",
    "order": {
     "cpt": "73721",
     "display": "MRI knee without contrast"
@@ -113,7 +187,7 @@
    ]
   },
   "redacted_view": {
-   "subject": "PT-2655",
+   "subject": "PT-1835",
    "age_band": "18-39",
    "sex": "male",
    "plan_id": "PLAN_A",
@@ -151,12 +225,38 @@
    {
     "agent": "Checker",
     "status": "ok",
-    "detail": "Prior authorization is required for this order."
+    "detail": "Prior authorization is required for this order.",
+    "io": {
+     "in": {
+      "plan": "PLAN_B",
+      "cpt": "70551 (MRI brain without contrast)"
+     },
+     "out": {
+      "needs_pa": true,
+      "decided_by": "payer rule table (not the LLM)"
+     }
+    }
    },
    {
     "agent": "Verifier",
     "status": "review",
-    "detail": "Non-covered benefit under Basic HMO \u2014 routed to human review."
+    "detail": "Non-covered benefit under Basic HMO \u2014 routed to human review.",
+    "io": {
+     "in": {
+      "plan": "PLAN_B",
+      "cpt": "70551",
+      "coverage_active": true
+     },
+     "out": {
+      "coverage_ok": false,
+      "covered_cpts": [
+       "73721",
+       "95810",
+       "97110"
+      ],
+      "route": "human_review"
+     }
+    }
    }
   ],
   "audit_log": [
@@ -168,7 +268,7 @@
   "appeal_letter": null,
   "packet": null,
   "redacted_view": {
-   "subject": "PT-6484",
+   "subject": "PT-2237",
    "age_band": "40-64",
    "sex": "female",
    "plan_id": "PLAN_B",
@@ -207,47 +307,170 @@
    {
     "agent": "Checker",
     "status": "ok",
-    "detail": "Prior authorization is required for this order."
+    "detail": "Prior authorization is required for this order.",
+    "io": {
+     "in": {
+      "plan": "PLAN_A",
+      "cpt": "73721 (MRI knee without contrast)"
+     },
+     "out": {
+      "needs_pa": true,
+      "decided_by": "payer rule table (not the LLM)"
+     }
+    }
    },
    {
     "agent": "Verifier",
     "status": "ok",
-    "detail": "Coverage active; procedure is a covered benefit."
+    "detail": "Coverage active; procedure is a covered benefit.",
+    "io": {
+     "in": {
+      "plan": "PLAN_A",
+      "cpt": "73721",
+      "coverage_active": true
+     },
+     "out": {
+      "coverage_ok": true,
+      "covered_cpts": [
+       "73721",
+       "70551",
+       "74177",
+       "95810",
+       "97110"
+      ]
+     }
+    }
    },
    {
     "agent": "Assembler",
     "status": "ok",
-    "detail": "Packet built \u2014 diagnoses ['Z00.00'], prior treatments [none]."
+    "detail": "Packet built \u2014 diagnoses ['Z00.00'], prior treatments [none].",
+    "io": {
+     "in": {
+      "documented_diagnoses": [
+       "Z00.00"
+      ],
+      "documented_prior_treatments": [],
+      "sees": "Safe-Harbor redacted case (LLM)"
+     },
+     "out": {
+      "diagnosis_codes": [
+       "Z00.00"
+      ],
+      "prior_treatments": [],
+      "clinical_justification": "Member requests MRI of the knee at a routine visit. The current encounter documents only a general adult medical examination; no knee pathology is recorded.",
+      "dropped_by_guard": []
+     }
+    }
    },
    {
     "agent": "Submitter",
     "status": "denied",
-    "detail": "Payer DENIED. Submitted diagnosis codes do not establish medical necessity for MRI knee without contrast. Need one of: ['M17.11', 'M23.2', 'M25.561', 'S83.5']."
+    "detail": "Payer DENIED. Submitted diagnosis codes do not establish medical necessity for MRI knee without contrast. Need one of: ['M17.11', 'M23.2', 'M25.561', 'S83.5'].",
+    "io": {
+     "in": {
+      "diagnosis_codes": [
+       "Z00.00"
+      ],
+      "prior_treatments": [],
+      "has_justification": true
+     },
+     "out": {
+      "outcome": "DENIED",
+      "reason": "Submitted diagnosis codes do not establish medical necessity for MRI knee without contrast. Need one of: ['M17.11', 'M23.2', 'M25.561', 'S83.5'].",
+      "missing": []
+     }
+    }
    },
    {
     "agent": "Appealer",
     "status": "ok",
-    "detail": "Appeal drafted and resubmitted (no new evidence found in the record)."
+    "detail": "Appeal drafted and resubmitted (no new evidence found in the record).",
+    "io": {
+     "in": {
+      "denial_reason": "Submitted diagnosis codes do not establish medical necessity for MRI knee without contrast. Need one of: ['M17.11', 'M23.2', 'M25.561', 'S83.5'].",
+      "sees": "Safe-Harbor redacted case (LLM)"
+     },
+     "out": {
+      "added_diagnosis_codes": [],
+      "appeal_letter": "To the Medical Review Board,\n\nWe are writing to appeal the denial of prior authorization for MRI of the knee without contrast (CPT 73721) for the referenced member. We acknowledge the payer's determination that the submitted documentation d\u2026"
+     }
+    }
    },
    {
     "agent": "Submitter",
     "status": "denied",
-    "detail": "Payer DENIED. Submitted diagnosis codes do not establish medical necessity for MRI knee without contrast. Need one of: ['M17.11', 'M23.2', 'M25.561', 'S83.5']."
+    "detail": "Payer DENIED. Submitted diagnosis codes do not establish medical necessity for MRI knee without contrast. Need one of: ['M17.11', 'M23.2', 'M25.561', 'S83.5'].",
+    "io": {
+     "in": {
+      "diagnosis_codes": [
+       "Z00.00"
+      ],
+      "prior_treatments": [],
+      "has_justification": true
+     },
+     "out": {
+      "outcome": "DENIED",
+      "reason": "Submitted diagnosis codes do not establish medical necessity for MRI knee without contrast. Need one of: ['M17.11', 'M23.2', 'M25.561', 'S83.5'].",
+      "missing": []
+     }
+    }
    },
    {
     "agent": "Assembler",
     "status": "ok",
-    "detail": "Packet built \u2014 diagnoses ['Z00.00'], prior treatments [none]."
+    "detail": "Packet built \u2014 diagnoses ['Z00.00'], prior treatments [none].",
+    "io": {
+     "in": {
+      "documented_diagnoses": [
+       "Z00.00"
+      ],
+      "documented_prior_treatments": [],
+      "sees": "Safe-Harbor redacted case (LLM)"
+     },
+     "out": {
+      "diagnosis_codes": [
+       "Z00.00"
+      ],
+      "prior_treatments": [],
+      "clinical_justification": "Member requests MRI of the knee at a routine visit. The current encounter documents only a general adult medical examination; no knee pathology is recorded.",
+      "dropped_by_guard": []
+     }
+    }
    },
    {
     "agent": "Submitter",
     "status": "denied",
-    "detail": "Payer DENIED. Submitted diagnosis codes do not establish medical necessity for MRI knee without contrast. Need one of: ['M17.11', 'M23.2', 'M25.561', 'S83.5']."
+    "detail": "Payer DENIED. Submitted diagnosis codes do not establish medical necessity for MRI knee without contrast. Need one of: ['M17.11', 'M23.2', 'M25.561', 'S83.5'].",
+    "io": {
+     "in": {
+      "diagnosis_codes": [
+       "Z00.00"
+      ],
+      "prior_treatments": [],
+      "has_justification": true
+     },
+     "out": {
+      "outcome": "DENIED",
+      "reason": "Submitted diagnosis codes do not establish medical necessity for MRI knee without contrast. Need one of: ['M17.11', 'M23.2', 'M25.561', 'S83.5'].",
+      "missing": []
+     }
+    }
    },
    {
     "agent": "Orchestrator",
     "status": "review",
-    "detail": "DENIED retry cap reached \u2014 escalated to a human reviewer."
+    "detail": "DENIED retry cap reached \u2014 escalated to a human reviewer.",
+    "io": {
+     "in": {
+      "needs_info_loops": 0,
+      "appeal_loops": 3
+     },
+     "out": {
+      "route": "human_review",
+      "reason": "no autonomous denial \u2014 human decides"
+     }
+    }
    }
   ],
   "audit_log": [
@@ -265,7 +488,7 @@
   "rationale": "Prior-authorization rationale for order 73721 (MRI knee without contrast) under plan PLAN_A:\n- Prior authorization IS required for this procedure under the plan.\n- Coverage is active and the procedure is a covered benefit.\n- Payer decision: DENIED \u2014 Submitted diagnosis codes do not establish medical necessity for MRI knee without contrast. Need one of: ['M17.11', 'M23.2', 'M25.561', 'S83.5'].\n- 2 appeal(s) were drafted and resubmitted.\n- OUTCOME: escalated to a human reviewer (no automated denial is final).",
   "appeal_letter": "To the Medical Review Board,\n\nWe are writing to appeal the denial of prior authorization for MRI of the knee without contrast (CPT 73721) for the referenced member. We acknowledge the payer's determination that the submitted documentation does not establish medical necessity.\n\nOn review of the available record, the current encounter documents only a general adult medical examination (Z00.00); it contains neither a qualifying knee diagnosis nor a documented trial of conservative treatment. We are therefore unable to supply additional supporting evidence at this time and will not assert findings that are not in the record.\n\nWe respectfully request that this case be routed to a human reviewer, and we will resubmit once appropriate clinical documentation (a qualifying diagnosis and a trial of conservative therapy) is available.\n\nSincerely,\nUtilization Management \u2014 Physician Advisor",
   "packet": {
-   "patient_id": "PT-1490",
+   "patient_id": "PT-6808",
    "order": {
     "cpt": "73721",
     "display": "MRI knee without contrast"
@@ -282,7 +505,7 @@
    "appeal_letter": "To the Medical Review Board,\n\nWe are writing to appeal the denial of prior authorization for MRI of the knee without contrast (CPT 73721) for the referenced member. We acknowledge the payer's determination that the submitted documentation does not establish medical necessity.\n\nOn review of the available record, the current encounter documents only a general adult medical examination (Z00.00); it contains neither a qualifying knee diagnosis nor a documented trial of conservative treatment. We are therefore unable to supply additional supporting evidence at this time and will not assert findings that are not in the record.\n\nWe respectfully request that this case be routed to a human reviewer, and we will resubmit once appropriate clinical documentation (a qualifying diagnosis and a trial of conservative therapy) is available.\n\nSincerely,\nUtilization Management \u2014 Physician Advisor"
   },
   "redacted_view": {
-   "subject": "PT-1490",
+   "subject": "PT-6808",
    "age_band": "18-39",
    "sex": "male",
    "plan_id": "PLAN_A",
@@ -321,47 +544,177 @@
    {
     "agent": "Checker",
     "status": "ok",
-    "detail": "Prior authorization is required for this order."
+    "detail": "Prior authorization is required for this order.",
+    "io": {
+     "in": {
+      "plan": "PLAN_A",
+      "cpt": "95810 (Polysomnography (sleep study))"
+     },
+     "out": {
+      "needs_pa": true,
+      "decided_by": "payer rule table (not the LLM)"
+     }
+    }
    },
    {
     "agent": "Verifier",
     "status": "ok",
-    "detail": "Coverage active; procedure is a covered benefit."
+    "detail": "Coverage active; procedure is a covered benefit.",
+    "io": {
+     "in": {
+      "plan": "PLAN_A",
+      "cpt": "95810",
+      "coverage_active": true
+     },
+     "out": {
+      "coverage_ok": true,
+      "covered_cpts": [
+       "73721",
+       "70551",
+       "74177",
+       "95810",
+       "97110"
+      ]
+     }
+    }
    },
    {
     "agent": "Assembler",
     "status": "ok",
-    "detail": "Packet built \u2014 diagnoses ['G47.33'], prior treatments [none]."
+    "detail": "Packet built \u2014 diagnoses ['G47.33'], prior treatments [none].",
+    "io": {
+     "in": {
+      "documented_diagnoses": [
+       "G47.33"
+      ],
+      "documented_prior_treatments": [],
+      "sees": "Safe-Harbor redacted case (LLM)"
+     },
+     "out": {
+      "diagnosis_codes": [
+       "G47.33"
+      ],
+      "prior_treatments": [],
+      "clinical_justification": "Patient reports loud habitual snoring, witnessed apneas, and significant daytime somnolence consistent with obstructive sleep apnea (G47.33). Attended polysomnography is indicated to confirm the diagnosis and titrate therapy.",
+      "dropped_by_guard": []
+     }
+    }
    },
    {
     "agent": "Submitter",
     "status": "needs_info",
-    "detail": "Payer NEEDS_INFO. Diagnosis supports the request, but required documentation is missing: ['sleep_questionnaire']."
+    "detail": "Payer NEEDS_INFO. Diagnosis supports the request, but required documentation is missing: ['sleep_questionnaire'].",
+    "io": {
+     "in": {
+      "diagnosis_codes": [
+       "G47.33"
+      ],
+      "prior_treatments": [],
+      "has_justification": true
+     },
+     "out": {
+      "outcome": "NEEDS_INFO",
+      "reason": "Diagnosis supports the request, but required documentation is missing: ['sleep_questionnaire'].",
+      "missing": []
+     }
+    }
    },
    {
     "agent": "Assembler",
     "status": "ok",
-    "detail": "Packet built \u2014 diagnoses ['G47.33'], prior treatments [none]."
+    "detail": "Packet built \u2014 diagnoses ['G47.33'], prior treatments [none].",
+    "io": {
+     "in": {
+      "documented_diagnoses": [
+       "G47.33"
+      ],
+      "documented_prior_treatments": [],
+      "sees": "Safe-Harbor redacted case (LLM)"
+     },
+     "out": {
+      "diagnosis_codes": [
+       "G47.33"
+      ],
+      "prior_treatments": [],
+      "clinical_justification": "Patient reports loud habitual snoring, witnessed apneas, and significant daytime somnolence consistent with obstructive sleep apnea (G47.33). Attended polysomnography is indicated to confirm the diagnosis and titrate therapy.",
+      "dropped_by_guard": []
+     }
+    }
    },
    {
     "agent": "Submitter",
     "status": "needs_info",
-    "detail": "Payer NEEDS_INFO. Diagnosis supports the request, but required documentation is missing: ['sleep_questionnaire']."
+    "detail": "Payer NEEDS_INFO. Diagnosis supports the request, but required documentation is missing: ['sleep_questionnaire'].",
+    "io": {
+     "in": {
+      "diagnosis_codes": [
+       "G47.33"
+      ],
+      "prior_treatments": [],
+      "has_justification": true
+     },
+     "out": {
+      "outcome": "NEEDS_INFO",
+      "reason": "Diagnosis supports the request, but required documentation is missing: ['sleep_questionnaire'].",
+      "missing": []
+     }
+    }
    },
    {
     "agent": "Assembler",
     "status": "ok",
-    "detail": "Packet built \u2014 diagnoses ['G47.33'], prior treatments [none]."
+    "detail": "Packet built \u2014 diagnoses ['G47.33'], prior treatments [none].",
+    "io": {
+     "in": {
+      "documented_diagnoses": [
+       "G47.33"
+      ],
+      "documented_prior_treatments": [],
+      "sees": "Safe-Harbor redacted case (LLM)"
+     },
+     "out": {
+      "diagnosis_codes": [
+       "G47.33"
+      ],
+      "prior_treatments": [],
+      "clinical_justification": "Patient reports loud habitual snoring, witnessed apneas, and significant daytime somnolence consistent with obstructive sleep apnea (G47.33). Attended polysomnography is indicated to confirm the diagnosis and titrate therapy.",
+      "dropped_by_guard": []
+     }
+    }
    },
    {
     "agent": "Submitter",
     "status": "needs_info",
-    "detail": "Payer NEEDS_INFO. Diagnosis supports the request, but required documentation is missing: ['sleep_questionnaire']."
+    "detail": "Payer NEEDS_INFO. Diagnosis supports the request, but required documentation is missing: ['sleep_questionnaire'].",
+    "io": {
+     "in": {
+      "diagnosis_codes": [
+       "G47.33"
+      ],
+      "prior_treatments": [],
+      "has_justification": true
+     },
+     "out": {
+      "outcome": "NEEDS_INFO",
+      "reason": "Diagnosis supports the request, but required documentation is missing: ['sleep_questionnaire'].",
+      "missing": []
+     }
+    }
    },
    {
     "agent": "Orchestrator",
     "status": "review",
-    "detail": "NEEDS_INFO retry cap reached \u2014 escalated to a human reviewer."
+    "detail": "NEEDS_INFO retry cap reached \u2014 escalated to a human reviewer.",
+    "io": {
+     "in": {
+      "needs_info_loops": 3,
+      "appeal_loops": 0
+     },
+     "out": {
+      "route": "human_review",
+      "reason": "no autonomous denial \u2014 human decides"
+     }
+    }
    }
   ],
   "audit_log": [
@@ -379,7 +732,7 @@
   "rationale": "Prior-authorization rationale for order 95810 (Polysomnography (sleep study)) under plan PLAN_A:\n- Prior authorization IS required for this procedure under the plan.\n- Coverage is active and the procedure is a covered benefit.\n- Payer decision: NEEDS_INFO \u2014 Diagnosis supports the request, but required documentation is missing: ['sleep_questionnaire'].\n- The packet was revised 2 time(s) to add requested documentation.\n- OUTCOME: escalated to a human reviewer (no automated denial is final).",
   "appeal_letter": null,
   "packet": {
-   "patient_id": "PT-6167",
+   "patient_id": "PT-0607",
    "order": {
     "cpt": "95810",
     "display": "Polysomnography (sleep study)"
@@ -395,7 +748,7 @@
    ]
   },
   "redacted_view": {
-   "subject": "PT-6167",
+   "subject": "PT-0607",
    "age_band": "40-64",
    "sex": "male",
    "plan_id": "PLAN_A",
