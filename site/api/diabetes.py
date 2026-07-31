@@ -50,14 +50,36 @@ def predict(inp):
     for k in ("hypertension", "heart_disease"):
         row[k] = int(row[k])
     df = pd.DataFrame([row]); df["bmi_missing"] = 0
-    df = _add_features(df)
-    p = float(_ART["model"].predict_proba(_ART["preprocessor"].transform(df))[:, 1][0])
+    eng = _add_features(df)                     # real feature engineering
+    engineered = {
+        "hba1c_category": str(eng["hba1c_category"].iloc[0]),
+        "glucose_category": str(eng["glucose_category"].iloc[0]),
+        "age_group": str(eng["age_group"].iloc[0]),
+        "comorbidity_count": int(eng["comorbidity_count"].iloc[0]),
+    }
+    Xt = _ART["preprocessor"].transform(eng)    # scale + one-hot encode
+    n_features = int(Xt.shape[1])
+    p = float(_ART["model"].predict_proba(Xt)[:, 1][0])
     thr = _ART["threshold"]
+    # Under-the-hood trace: the actual stages this request ran through, with real
+    # values — so a viewer can see this is a live model call, not a lookup.
+    steps = [
+        {"stage": "1 · Input received", "detail": {k: row[k] for k in RAW_COLS}},
+        {"stage": "2 · Feature engineering", "detail": engineered},
+        {"stage": "3 · Preprocessing / encoding",
+         "detail": {"encoded_features": n_features, "ops": "impute → scale numeric → one-hot categoricals"}},
+        {"stage": "4 · Model inference",
+         "detail": {"model": _ART["model_name"], "raw_probability": round(p, 4)}},
+        {"stage": "5 · Decision @ threshold",
+         "detail": {"threshold": round(thr, 4), "rule": f"{round(p,4)} {'≥' if p >= thr else '<'} {round(thr,4)}",
+                    "verdict": "High risk" if p >= thr else "Low risk"}},
+    ]
     return {
         "probability": round(p, 4),
         "threshold": round(thr, 4),
         "flag": bool(p >= thr),
         "label": "High diabetes risk" if p >= thr else "Low diabetes risk",
+        "steps": steps,
         "global_importance": _ART["global_importance"],
         "model_name": _ART["model_name"],
     }

@@ -1,0 +1,25 @@
+[project]
+name = "clinical-document-agent"
+version = "0.1.0"
+description = "Multi-agent system that drafts a SOAP note, extracts ICD-10/CPT codes, and records it only after a clinician sign-off."
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.6",
+    "python-dotenv>=1.0",
+    "langgraph>=0.2",
+    "langchain-core>=0.3",
+    "langchain-openai>=0.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

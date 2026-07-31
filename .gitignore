@@ -49,6 +49,10 @@ mlflow.db
 **/feature_store/
 *.bak
 
+# === Personal / non-code docs (keep out of public repo) ===
+*.docx.pdf
+VenD_AI_*.pdf
+
 # === Local tooling / OS ===
 .claude/
 .DS_Store

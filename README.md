@@ -15,13 +15,15 @@ built, what you get out of it, and why it matters — without assuming a technic
 | Project | Domain | What it does |
 |---|---|---|
 | Prior Authorization Agent | Healthcare | A team of AI agents that handles a medical insurance approval from start to finish, with a human as the final approver. |
+| Clinical Documentation Agent | Healthcare | A team of AI agents that drafts a visit note and its medical codes, recorded only after a clinician signs off. |
 | Diabetes Prediction | Healthcare | Estimates a patient's diabetes risk from routine health data and explains the result. |
 | Malicious URL Detection | Cybersecurity | Reads a web link and flags it as safe, phishing, malware, or defacement. |
 | SMS Spam Detection | Cybersecurity | Flags scam or spam text messages and highlights the exact words that gave them away. |
 | Credit Card Fraud Detection | Finance | Spots fraudulent card transactions in data where fraud is extremely rare. |
 
-The four ML projects are live demos you can try in the browser. The Prior Authorization Agent
-is the flagship, most involved system.
+All six projects are live demos you can try in the browser. The two Healthcare agent systems —
+the Prior Authorization Agent and the Clinical Documentation Agent — are the flagship, most
+involved systems.
 
 ---
 
@@ -62,7 +64,27 @@ and an appeal letter when needed — all traceable step by step. It recovers den
 the tricky multi-step cases that a single AI prompt gets wrong, while keeping a human in charge.
 It runs entirely on synthetic data — no real patients, no real insurer.
 
-### 2. Diabetes Prediction (Healthcare)
+### 2. Clinical Documentation Agent (Healthcare)
+
+**The problem.** Writing up a patient visit — the note plus the diagnosis and billing codes —
+takes doctors hours and is where costly coding errors creep in.
+
+**What it does.** Five specialised AI agents work as a team: one cleans up the visit input, one
+drafts the SOAP note (Subjective, Objective, Assessment, Plan), one extracts the ICD-10 and CPT
+codes, one validates them, and one writes the note to the record — but only after a clinician
+reviews and signs off. The clinician can sign, edit, or reject; nothing is filed on its own.
+
+**How it is designed.** Because writing is easy to get plausibly wrong, the safety net is not the
+AI. Every code is checked against the real ICD-10/CPT code lists and invented codes are dropped;
+any claim in the note that is not supported by the visit input is flagged for a human; and the
+record is never written until a clinician signs. Identifiers are stripped before anything leaves
+the machine, and every step is logged.
+
+**Output and impact.** A complete SOAP note, validated codes each with a reason, and a
+plain-English summary — filed only with a human signature. It produces better-grounded notes and
+safer codes than a single AI prompt, and it runs on synthetic data — no real patients.
+
+### 3. Diabetes Prediction (Healthcare)
 
 **The problem.** Identifying diabetes risk early from routine measurements.
 
@@ -76,7 +98,7 @@ factors drove each prediction.
 **Output and impact.** A clear probability plus the top contributing factors, so a clinician can
 see *why* a patient was flagged rather than trusting a black box.
 
-### 3. Malicious URL Detection (Cybersecurity)
+### 4. Malicious URL Detection (Cybersecurity)
 
 **The problem.** Dangerous web links (phishing, malware) look almost identical to safe ones.
 
@@ -89,7 +111,7 @@ judges from those signals alone, so it is fast and safe to run.
 
 **Output and impact.** An instant verdict with the specific red flags it found in the link.
 
-### 4. SMS Spam Detection (Cybersecurity)
+### 5. SMS Spam Detection (Cybersecurity)
 
 **The problem.** Scam and spam text messages that trick people into clicking or paying.
 
@@ -102,7 +124,7 @@ explanation, not a guess after the fact.
 **Output and impact.** A verdict plus a highlighted list of the words that flagged the message,
 so the reasoning is fully visible.
 
-### 5. Credit Card Fraud Detection (Finance)
+### 6. Credit Card Fraud Detection (Finance)
 
 **The problem.** Fraud is rare — fewer than 2 in 1,000 transactions — which makes it easy to
 miss and easy to fake good results.

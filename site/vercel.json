@@ -8,6 +8,10 @@
       "maxDuration": 60,
       "includeFiles": "api/pa_samples.json"
     },
+    "api/clinical-doc.py": {
+      "memory": 1024,
+      "maxDuration": 60
+    },
     "api/*.py": {
       "memory": 1024,
       "maxDuration": 30,

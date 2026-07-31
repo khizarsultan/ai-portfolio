@@ -1,0 +1,27 @@
+[
+  {
+    "encounter_id": "enc_001", "age": 34, "sex": "female", "specialty": "Family medicine",
+    "source_note": "34F presents with dysuria and urinary frequency for 3 days. Afebrile, no flank pain. Urinalysis positive for nitrites and leukocyte esterase. Assessment: uncomplicated urinary tract infection. Plan: start nitrofurantoin 100mg BID x5 days, increase fluids, return if symptoms worsen.",
+    "reference_codes": ["N39.0", "99213", "81002"]
+  },
+  {
+    "encounter_id": "enc_002", "age": 58, "sex": "male", "specialty": "Internal medicine",
+    "source_note": "58M for type 2 diabetes follow-up. Reports polyuria and increased thirst. HbA1c today 8.2%. BP 138/86. Assessment: type 2 diabetes with hyperglycemia; essential hypertension. Plan: increase metformin, reinforce diet and exercise, recheck A1c in 3 months, comprehensive metabolic panel ordered.",
+    "reference_codes": ["E11.65", "I10", "99214", "83036", "80053"]
+  },
+  {
+    "encounter_id": "enc_003", "age": 47, "sex": "male", "specialty": "Cardiology",
+    "source_note": "47M with chest pain on exertion that resolves with rest for the past week. Vitals stable. ECG performed in clinic. Plan: start aspirin, order stress test, cardiology follow-up.",
+    "reference_codes": ["R07.9", "93000", "99204"]
+  },
+  {
+    "encounter_id": "enc_004", "age": 62, "sex": "female", "specialty": "Family medicine",
+    "source_note": "62F for hypertension follow-up. Home readings well controlled, today 128/78. Lipid panel shows mild hyperlipidemia. Plan: continue lisinopril, start diet changes for cholesterol, recheck lipids in 6 months.",
+    "reference_codes": ["I10", "E78.5", "99213"]
+  },
+  {
+    "encounter_id": "enc_005", "age": 29, "sex": "male", "specialty": "Family medicine",
+    "source_note": "29M with acute low back pain after lifting boxes yesterday. No red-flag symptoms, no radiculopathy, normal neuro exam. Plan: NSAIDs, activity as tolerated, physical therapy referral.",
+    "reference_codes": ["M54.5", "99213"]
+  }
+]

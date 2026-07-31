@@ -38,6 +38,25 @@ export const PROJECTS: Project[] = [
     featured: true,
   },
   {
+    slug: "clinical-documentation-agent",
+    title: "Clinical Documentation Agent",
+    domain: "Healthcare",
+    kind: "Agentic AI",
+    tagline: "A multi-agent system that turns a patient visit into a signed clinical note.",
+    description:
+      "Five specialised agents (Intake, SOAP Writer, Coder, Validator, Recorder) orchestrated with LangGraph draft a SOAP note, extract ICD-10/CPT codes, and validate them — but nothing is written to the record until a clinician signs off. Because this is a generation task, the trust anchors are deterministic code-set validation and a mandatory human sign-off; the model only drafts and extracts.",
+    highlights: [
+      "Mandatory clinician sign-off gate — no autonomous record writes",
+      "Codes validated against real ICD-10/CPT sets; invented codes dropped",
+      "Grounding + completeness checks flag unsupported claims to human review",
+      "HIPAA Safe-Harbor redaction before any egress; full audit trail",
+    ],
+    stack: ["LangGraph", "LangChain", "NVIDIA NIM", "FastAPI", "React", "Langfuse", "Pydantic"],
+    demoEnv: "NEXT_PUBLIC_DEMO_CLINICAL_DOC",
+    demoPath: "/demos/clinical-doc",
+    featured: true,
+  },
+  {
     slug: "diabetes-prediction",
     title: "Diabetes Prediction",
     domain: "Healthcare",
