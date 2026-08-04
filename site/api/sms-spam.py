@@ -25,13 +25,32 @@ def predict(text):
     idx = np.nonzero(contrib)[0]
     order = sorted(idx, key=lambda i: -abs(contrib[i]))[:10]
     tokens = [{"token": str(_ART["vocab"][i]), "contribution": round(float(contrib[i]), 4)} for i in order]
-    thr = _ART["threshold"]
+    thr = float(_ART["threshold"])
+    n_words = len(text.split())
+    weighted = float(contrib.sum())
+
+    # Glass-box trace: real intermediate values so a viewer sees this is a live
+    # model call, not a lookup. Mirrors the diabetes/fraud/URL demos.
+    steps = [
+        {"stage": "1 · Input received", "detail": {
+            "characters": len(text), "words": n_words}},
+        {"stage": "2 · Tokenization / TF-IDF", "detail": {
+            "active_terms": int(len(idx)), "vocabulary": int(v.shape[1]),
+            "representation": "sparse TF-IDF"}},
+        {"stage": "3 · Linear model score", "detail": {
+            "model": _ART["model_name"], "weighted_sum": round(weighted, 3),
+            "raw_probability": round(p, 4)}},
+        {"stage": "4 · Decision @ threshold", "detail": {
+            "rule": f"p {'≥' if p >= thr else '<'} {round(thr, 4)}",
+            "verdict": "Spam / malicious" if p >= thr else "Benign (ham)"}},
+    ]
     return {
         "probability": round(p, 4),
         "threshold": round(thr, 4),
         "flag": bool(p >= thr),
         "label": "Spam / malicious" if p >= thr else "Benign (ham)",
         "tokens": tokens,
+        "steps": steps,
         "model_name": _ART["model_name"],
     }
 

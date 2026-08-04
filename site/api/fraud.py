@@ -28,18 +28,40 @@ def _add_features(df):
 
 
 def predict(raw):
-    raw = {k: (float(v) if k != "Time" else float(v)) for k, v in raw.items()}
+    raw = {k: float(v) for k, v in raw.items()}
     df = _add_features(pd.DataFrame([raw]))
     Xt = _ART["preprocessor"].transform(df[list(_ART["input_cols"])])
     p = float(_ART["model"].predict_proba(Xt)[:, 1][0])
-    thr = _ART["threshold"]
+    thr = float(_ART["threshold"])
+    hour = int(df["hour"].iloc[0])
+    amount = round(float(raw["Amount"]), 2)
+    n_v = sum(1 for k in raw if k.startswith("V"))
+
+    # Glass-box trace: real intermediate values so a viewer sees this is a live
+    # model call, not a lookup. Mirrors the diabetes/URL demos.
+    steps = [
+        {"stage": "1 · Input received", "detail": {
+            "amount": f"${amount:,.2f}", "time_s": int(raw.get("Time", 0)),
+            "pca_signals": f"{n_v} (V1–V{n_v})"}},
+        {"stage": "2 · Feature engineering", "detail": {
+            "hour_of_day": hour, "log_amount": round(float(df["log_amount"].iloc[0]), 3),
+            "amount_bin": str(df["amount_bin"].iloc[0]), "zero_amount": int(df["amount_zero"].iloc[0])}},
+        {"stage": "3 · Preprocessing / encoding", "detail": {
+            "scaled_numerics": "z-score", "amount_bin": "one-hot", "encoded_features": int(Xt.shape[1])}},
+        {"stage": "4 · Model inference", "detail": {
+            "model": _ART["model_name"], "raw_probability": round(p, 4)}},
+        {"stage": "5 · Decision @ threshold", "detail": {
+            "rule": f"p {'≥' if p >= thr else '<'} {round(thr, 4)}",
+            "verdict": "Fraudulent" if p >= thr else "Legitimate"}},
+    ]
     return {
         "probability": round(p, 4),
         "threshold": round(thr, 4),
         "flag": bool(p >= thr),
         "label": "Fraudulent" if p >= thr else "Legitimate",
-        "amount": round(float(raw["Amount"]), 2),
-        "hour": int(df["hour"].iloc[0]),
+        "amount": amount,
+        "hour": hour,
+        "steps": steps,
         "global_importance": _ART["global_importance"],
         "model_name": _ART["model_name"],
     }
