@@ -78,6 +78,44 @@ export function DevHint() {
   );
 }
 
+// ---- evaluation scores ---------------------------------------------------
+export type EvalMetric = { key: string; label: string; score: number; tone: "good" | "warn" | "bad"; detail: string };
+
+const EVAL_BAR: Record<string, string> = { good: "bg-emerald-500", warn: "bg-amber-500", bad: "bg-red-500" };
+const EVAL_TEXT: Record<string, string> = {
+  good: "text-emerald-600 dark:text-emerald-400",
+  warn: "text-amber-600 dark:text-amber-400",
+  bad: "text-red-600 dark:text-red-400",
+};
+
+export function EvalScores({ metrics }: { metrics: EvalMetric[] }) {
+  if (!metrics?.length) return null;
+  const avg = Math.round(metrics.reduce((a, m) => a + m.score, 0) / metrics.length);
+  const overallTone = avg >= 80 ? "good" : avg >= 50 ? "warn" : "bad";
+  return (
+    <Card className="!p-5">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-slate-500">Evaluation scores</h2>
+        <div className={`text-xl font-bold tabular-nums ${EVAL_TEXT[overallTone]}`}>{avg}<span className="text-xs font-medium text-slate-400">/100</span></div>
+      </div>
+      <p className="mt-0.5 text-[11px] text-slate-400">How correct, grounded &amp; reliable this run is.</p>
+      <div className="mt-4 space-y-3">
+        {metrics.map((m) => (
+          <div key={m.key} title={m.detail}>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[13px] font-medium leading-tight text-slate-700 dark:text-slate-200">{m.label}</span>
+              <span className={`text-[13px] font-bold tabular-nums ${EVAL_TEXT[m.tone]}`}>{m.score}</span>
+            </div>
+            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+              <div className={`h-full rounded-full ${EVAL_BAR[m.tone]} transition-all duration-700`} style={{ width: `${m.score}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 // ---- result widgets ------------------------------------------------------
 export function Verdict({ flag, label, dangerIsTrue = true }: { flag: boolean; label: string; dangerIsTrue?: boolean }) {
   const danger = flag === dangerIsTrue;

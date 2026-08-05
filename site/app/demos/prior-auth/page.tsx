@@ -5,7 +5,7 @@ export const metadata = { title: "Prior Authorization Agent — Live Demo — Kh
 
 export default function Page() {
   return (
-    <DemoPage slug="prior-authorization-agent">
+    <DemoPage slug="prior-authorization-agent" wide>
       <PaAgentDemo />
     </DemoPage>
   );

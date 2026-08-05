@@ -6,12 +6,12 @@ import { getProject } from "@/lib/projects";
 
 // Server-rendered chrome shared by every demo route (Nav, header, back link, Footer).
 // The interactive island is passed as `children` (a client component).
-export default function DemoPage({ slug, children }: { slug: string; children: ReactNode }) {
+export default function DemoPage({ slug, wide, children }: { slug: string; wide?: boolean; children: ReactNode }) {
   const p = getProject(slug);
   return (
     <>
       <Nav />
-      <main className="mx-auto max-w-5xl px-6 py-12">
+      <main className={`mx-auto ${wide ? "max-w-7xl" : "max-w-5xl"} px-6 py-12`}>
         <Link href={`/projects/${slug}`} className="text-sm text-slate-500 hover:text-brand">
           ← {p ? p.title : "Project"}
         </Link>

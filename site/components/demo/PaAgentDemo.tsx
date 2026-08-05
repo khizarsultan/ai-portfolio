@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Card, RunButton, ErrorNote, DevHint, getJSON, postJSON } from "./ui";
+import { Card, RunButton, ErrorNote, DevHint, EvalScores, EvalMetric, getJSON, postJSON } from "./ui";
 import AgentFlowGraph from "./AgentFlowGraph";
 
 type CaseInfo = {
@@ -16,7 +16,7 @@ type RunResult = {
   decision: { outcome: string; reason: string } | null;
   status: string; steps: Step[]; audit_log: string[]; rationale: string;
   appeal_letter: string | null; redacted_view: Record<string, unknown>;
-  model: string; elapsed_ms: number;
+  evals?: EvalMetric[]; model: string; elapsed_ms: number;
 };
 
 const STATUS_STYLE: Record<string, { dot: string; text: string; ring: string }> = {
@@ -96,9 +96,9 @@ export default function PaAgentDemo() {
   const done = result && visible >= result.steps.length;
 
   return (
-    <div className="grid gap-6 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
       {/* ---- left: sticky rail — pick a case + prominent Run ---- */}
-      <div className="space-y-4 self-start md:sticky md:top-6">
+      <div className="space-y-4 self-start lg:sticky lg:top-6">
         <Card className="!p-5">
           <div className="flex items-baseline justify-between">
             <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Choose a scenario</h2>
@@ -191,20 +191,23 @@ export default function PaAgentDemo() {
         )}
 
         {result && (
-          <Card>
-            <h2 className="text-sm font-semibold text-slate-500">Architecture &amp; routing</h2>
-            <p className="mt-1 text-xs text-slate-400">The agent graph; the path taken on this run is highlighted. Click a node to jump to its step.</p>
-            <div className="mt-3">
-              <AgentFlowGraph
-                steps={result.steps} status={result.status} decision={result.decision}
-                needsPa={result.needs_pa} coverageOk={result.coverage_ok} revealCount={visible}
-                onPick={(agent) => {
-                  const idx = result.steps.findIndex((s) => s.agent === agent);
-                  if (idx >= 0) setOpenStep(idx);
-                }}
-              />
-            </div>
-          </Card>
+          <div className={`grid gap-4 ${done && result.evals ? "xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]" : ""}`}>
+            <Card>
+              <h2 className="text-sm font-semibold text-slate-500">Architecture &amp; routing</h2>
+              <p className="mt-1 text-xs text-slate-400">The agent graph; the path taken on this run is highlighted. Click a node to jump to its step.</p>
+              <div className="mt-3">
+                <AgentFlowGraph
+                  steps={result.steps} status={result.status} decision={result.decision}
+                  needsPa={result.needs_pa} coverageOk={result.coverage_ok} revealCount={visible}
+                  onPick={(agent) => {
+                    const idx = result.steps.findIndex((s) => s.agent === agent);
+                    if (idx >= 0) setOpenStep(idx);
+                  }}
+                />
+              </div>
+            </Card>
+            {done && result.evals && <EvalScores metrics={result.evals} />}
+          </div>
         )}
 
         {result && (

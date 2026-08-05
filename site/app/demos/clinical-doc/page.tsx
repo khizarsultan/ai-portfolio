@@ -5,7 +5,7 @@ export const metadata = { title: "Clinical Documentation Agent — Live Demo —
 
 export default function Page() {
   return (
-    <DemoPage slug="clinical-documentation-agent">
+    <DemoPage slug="clinical-documentation-agent" wide>
       <ClinicalDocDemo />
     </DemoPage>
   );
