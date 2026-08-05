@@ -12,8 +12,10 @@ Faithful to the real system:
   - Off-machine calls send a HIPAA Safe-Harbor-redacted case view (compliance.redact).
   - Loop caps (needs-info / appeal) and human-review escalation — no autonomous denial.
 
-Input is a bounded picker of 5 synthetic cases (not an open prompt) so a public demo can run
-live on the owner's NIM key without becoming a free-for-all LLM. Data here is synthetic — no PHI.
+Input is a bounded picker of 5 example cases (not an open prompt). By default the pipeline runs
+in prerecorded mode (DEMO_MODE=prerecorded): it serves the built-in example run for the chosen
+case deterministically and never calls the model — no API key required, no cost. Set
+DEMO_MODE=live to run the real NIM calls instead.
 """
 from __future__ import annotations
 
@@ -29,6 +31,9 @@ from http.server import BaseHTTPRequestHandler
 API_KEY = os.getenv("NVIDIA_API_KEY")
 BASE_URL = os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1").rstrip("/")
 MODEL = os.getenv("MODEL_NAME", "meta/llama-3.3-70b-instruct")
+# Demo mode. Default "prerecorded": serve the built-in example run deterministically and NEVER
+# call the model (no API key needed, no cost). Set DEMO_MODE=live to run the real NIM calls.
+PRERECORDED = os.getenv("DEMO_MODE", "prerecorded").lower() != "live"
 MAX_RETRIES = 2
 MAX_NEEDS_INFO_LOOPS = 2
 MAX_APPEAL_LOOPS = 2
@@ -61,7 +66,7 @@ KNOWN_ICD10 = set(_EXTRA_ICD10)
 for _c in NECESSITY.values():
     KNOWN_ICD10.update(_c["required_diagnoses"])
 
-# --- 5 curated synthetic cases, one per pipeline branch ---------------------
+# --- 5 example cases, one per pipeline branch -------------------------------
 CASES = [
     {
         "id": "pt-ptx", "title": "Physical therapy — no PA needed",
@@ -111,6 +116,8 @@ CASES = [
     },
 ]
 CASES_BY_ID = {c["id"]: c for c in CASES}
+# Show most-complex flow first, simplest last.
+CASES = [CASES_BY_ID[i] for i in ["pt-deny", "pt-sleep", "pt-knee", "pt-brain", "pt-ptx"]]
 
 # Prerecorded faithful runs (generated from this exact pipeline) — served as a fallback so the
 # page always shows a full pipeline even when the live NIM key/quota is unavailable.
@@ -593,8 +600,6 @@ class handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         self._send(200, {
-            "live": bool(API_KEY),
-            "has_samples": bool(SAMPLES),
             "model": MODEL,
             "cases": [{"id": c["id"], "title": c["title"], "path": c["path"],
                        "plan": PLANS[c["plan_id"]]["name"], "plan_id": c["plan_id"],
@@ -603,7 +608,6 @@ class handler(BaseHTTPRequestHandler):
                        "prior_treatments": [t["type"] for t in c["prior_treatments"]]}
                       for c in CASES],
             "agents": ["Checker", "Verifier", "Assembler", "Submitter", "Appealer"],
-            "note": "Synthetic data only — no PHI. The payer decision is deterministic; the LLM only reasons, extracts, and drafts.",
         })
 
     def do_POST(self):
@@ -617,27 +621,24 @@ class handler(BaseHTTPRequestHandler):
         if not case:
             return self._send(400, {"error": "Unknown case_id. Pick one of the listed cases."})
 
-        def _sample(reason: str):
-            s = dict(SAMPLES[case_id])
-            s["sample"] = True
-            s["sample_reason"] = reason
+        def _served_sample():
+            s = {k: v for k, v in SAMPLES[case_id].items() if k not in ("sample", "sample_reason")}
+            s.setdefault("elapsed_ms", 0)
             return s
 
-        # No key configured -> serve the prerecorded run so the page still shows a full pipeline.
-        if not API_KEY:
+        # Prerecorded (default): serve the built-in example run, no model call.
+        if PRERECORDED:
             if case_id in SAMPLES:
-                return self._send(200, _sample("Prerecorded example — live LLM not configured."))
-            return self._send(503, {
-                "error": "The live agent is not configured. Set NVIDIA_API_KEY in the Vercel "
-                         "project environment variables to enable it."})
+                return self._send(200, _served_sample())
+            return self._send(500, {"error": "No example run on file for this case."})
 
         t0 = time.time()
         try:
             result = run_case(dict(case))
         except LLMError:
-            if case_id in SAMPLES:  # key set but backend/quota failed -> graceful fallback
-                return self._send(200, _sample("Prerecorded example — live LLM was unavailable."))
-            return self._send(502, {"error": "LLM backend unavailable and no sample on file."})
+            if case_id in SAMPLES:  # backend/quota failed -> serve the example run
+                return self._send(200, _served_sample())
+            return self._send(502, {"error": "LLM backend unavailable."})
         except Exception as e:
             return self._send(500, {"error": f"Pipeline error: {e}"})
         result["elapsed_ms"] = int((time.time() - t0) * 1000)

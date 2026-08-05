@@ -46,12 +46,12 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return <select {...props} className={inputCls} />;
 }
 
-export function RunButton({ loading, children, ...rest }: { loading?: boolean } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+export function RunButton({ loading, className = "", children, ...rest }: { loading?: boolean } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
       {...rest}
       disabled={loading || rest.disabled}
-      className="inline-flex items-center gap-2 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-60"
+      className={`inline-flex items-center gap-2 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
     >
       {loading && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />}
       {children}

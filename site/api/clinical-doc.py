@@ -13,8 +13,10 @@ Faithful to the real system:
   - Off-machine calls send a HIPAA Safe-Harbor-redacted encounter view (compliance.redact).
   - Edit/regenerate loop caps + human-review escalation — nothing autonomous reaches the record.
 
-Input is a bounded picker of 5 synthetic encounters (not an open prompt) so a public demo can
-run live on the owner's NIM key without becoming a free-for-all LLM. Data is synthetic — no PHI.
+Input is a bounded picker of 5 example encounters (not an open prompt). By default the pipeline
+runs in prerecorded mode (DEMO_MODE=prerecorded): it replays the built-in example outputs
+deterministically and never calls the model — no API key required, no cost. Set DEMO_MODE=live
+to run the real NIM calls instead.
 """
 from __future__ import annotations
 
@@ -30,6 +32,10 @@ from http.server import BaseHTTPRequestHandler
 API_KEY = os.getenv("NVIDIA_API_KEY")
 BASE_URL = os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1").rstrip("/")
 MODEL = os.getenv("MODEL_NAME", "meta/llama-3.3-70b-instruct")
+# Demo mode. Default "prerecorded": the pipeline replays the built-in example outputs
+# deterministically and NEVER calls the model (no API key needed, no cost, no variability).
+# Set DEMO_MODE=live only to run the real NIM calls.
+PRERECORDED = os.getenv("DEMO_MODE", "prerecorded").lower() != "live"
 MAX_RETRIES = 2
 MAX_EDIT_LOOPS = 2
 MIN_CONFIDENCE = 0.7
@@ -60,7 +66,7 @@ CPT = {
 }
 SOAP_SECTIONS = ["subjective", "objective", "assessment", "plan"]
 
-# --- 5 curated synthetic encounters, one per pipeline branch ----------------
+# --- 5 example encounters, one per pipeline branch --------------------------
 # `canned` = a plausible draft used when the live LLM is unavailable (keeps the page showing a
 # full pipeline). `signoff` = what the clinician did at the gate (sign | edit | reject).
 CASES = [
@@ -185,6 +191,8 @@ CASES = [
     },
 ]
 CASES_BY_ID = {c["id"]: c for c in CASES}
+# Show most-complex flow first, simplest last.
+CASES = [CASES_BY_ID[i] for i in ["enc-htn", "enc-backpain", "enc-chestpain", "enc-diabetes", "enc-uti"]]
 
 
 # --- compliance: Safe-Harbor redaction (from src/compliance/redact.py) ------
@@ -329,18 +337,18 @@ _SOAP_SYS = ("You are a clinical scribe. From the encounter note, write a SOAP n
 
 
 def agent_soap_writer(state: dict) -> None:
-    case = state["case"]
     fb = state.get("edit_feedback")
-    loop_note = f"\nClinician feedback on the previous draft: \"{fb}\". Apply it." if fb else ""
-    user = (f"Encounter note:\n{state['encounter_text']}{loop_note}\n\n"
-            'Return JSON: {"subjective": "", "objective": "", "assessment": "", "plan": ""} — '
-            "each a concise paragraph grounded in the note.")
-    try:
-        out = llm_json(_SOAP_SYS, user, SOAP_SECTIONS)
-        soap = _norm_soap(out)
-    except LLMError:
+    if PRERECORDED:
         soap = _norm_soap(_canned(state)["soap"])
-        state["used_canned"] = True
+    else:
+        loop_note = f"\nClinician feedback on the previous draft: \"{fb}\". Apply it." if fb else ""
+        user = (f"Encounter note:\n{state['encounter_text']}{loop_note}\n\n"
+                'Return JSON: {"subjective": "", "objective": "", "assessment": "", "plan": ""} — '
+                "each a concise paragraph grounded in the note.")
+        try:
+            soap = _norm_soap(llm_json(_SOAP_SYS, user, SOAP_SECTIONS))
+        except LLMError:
+            soap = _norm_soap(_canned(state)["soap"])
     state["soap"] = soap
     missing = [s for s in SOAP_SECTIONS if not soap[s]]
     _log(state, "SOAP Writer", f"Drafted SOAP note ({'complete' if not missing else 'missing ' + str(missing)}).")
@@ -357,16 +365,16 @@ _CODER_SYS = ("You are a medical coder. From the SOAP note, extract ICD-10 diagn
 def agent_coder(state: dict) -> None:
     soap = state["soap"]
     fb = state.get("edit_feedback")
-    user = (f"SOAP note (JSON):\n{json.dumps(soap, indent=2)}\n"
-            + (f"\nClinician feedback: \"{fb}\". Apply it.\n" if fb else "")
-            + '\nReturn JSON: {"codes": [{"system": "ICD-10"|"CPT", "code": "", "rationale": ""}]}')
-    try:
-        out = llm_json(_CODER_SYS, user, ["codes"])
-        codes = _norm_codes(out.get("codes"))
-    except LLMError:
-        src = state.get("_canned_codes") or _canned(state)["codes"]
-        codes = _norm_codes(src)
-        state["used_canned"] = True
+    if PRERECORDED:
+        codes = _norm_codes(state.get("_canned_codes") or _canned(state)["codes"])
+    else:
+        user = (f"SOAP note (JSON):\n{json.dumps(soap, indent=2)}\n"
+                + (f"\nClinician feedback: \"{fb}\". Apply it.\n" if fb else "")
+                + '\nReturn JSON: {"codes": [{"system": "ICD-10"|"CPT", "code": "", "rationale": ""}]}')
+        try:
+            codes = _norm_codes(llm_json(_CODER_SYS, user, ["codes"]).get("codes"))
+        except LLMError:
+            codes = _norm_codes(state.get("_canned_codes") or _canned(state)["codes"])
     state["codes"] = codes
     _log(state, "Coder", f"Extracted {len(codes)} code(s): {[c['code'] for c in codes]}.")
     _step(state, "Coder", "ok", f"Extracted {len(codes)} code(s) with rationales." + (" (revised)" if fb else ""),
@@ -507,7 +515,7 @@ def _canned(state: dict) -> dict:
 def run_case(case: dict) -> dict:
     state = {"case": case, "encounter_text": None, "soap": None, "codes": None, "flags": [],
              "confidence": None, "signed_off": False, "signer": None, "edit_feedback": None,
-             "edit_count": 0, "used_canned": False, "audit_log": [], "steps": [], "status": "running"}
+             "edit_count": 0, "audit_log": [], "steps": [], "status": "running"}
     agent_intake(state)
 
     loops = 0
@@ -555,7 +563,6 @@ def _finalize(state: dict) -> dict:
         "rationale": explain(state),
         "record": state.get("record"),
         "redacted_view": redact_case(state["case"]),
-        "sample": state.get("used_canned", False),
         "model": MODEL,
     }
 
@@ -572,14 +579,11 @@ class handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         self._send(200, {
-            "live": bool(API_KEY),
             "model": MODEL,
             "cases": [{"id": c["id"], "title": c["title"], "path": c["path"],
                        "specialty": c["specialty"], "age_band": _age_band(c["age"]), "sex": c["sex"],
                        "raw": c["raw"]} for c in CASES],
             "agents": ["Intake", "SOAP Writer", "Coder", "Validator", "Recorder"],
-            "note": "Synthetic data only — no PHI. Codes are validated against real ICD-10/CPT sets; "
-                    "nothing is written to the record without a clinician sign-off.",
         })
 
     def do_POST(self):
@@ -596,8 +600,5 @@ class handler(BaseHTTPRequestHandler):
             result = run_case(dict(case))
         except Exception as e:
             return self._send(500, {"error": f"Pipeline error: {e}"})
-        if result.get("sample"):
-            result["sample_reason"] = ("Prerecorded example — live LLM not configured."
-                                       if not API_KEY else "Prerecorded example — live LLM was unavailable.")
         result["elapsed_ms"] = int((time.time() - t0) * 1000)
         self._send(200, result)

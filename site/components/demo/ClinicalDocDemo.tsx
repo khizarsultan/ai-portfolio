@@ -7,7 +7,7 @@ type CaseInfo = {
   id: string; title: string; path: string; specialty: string;
   age_band: string; sex: string; raw: string;
 };
-type Meta = { live: boolean; model: string; cases: CaseInfo[]; agents: string[]; note: string };
+type Meta = { model: string; cases: CaseInfo[]; agents: string[] };
 type IO = { in?: Record<string, unknown>; out?: Record<string, unknown> };
 type Step = { agent: string; status: string; detail: string; io?: IO };
 type Code = { system: string; code: string; rationale: string };
@@ -17,7 +17,6 @@ type RunResult = {
   signed_off: boolean; signer: string | null; record_id: string | null;
   status: string; steps: Step[]; audit_log: string[]; rationale: string;
   redacted_view: Record<string, unknown>; model: string; elapsed_ms: number;
-  sample?: boolean; sample_reason?: string;
 };
 
 const STATUS_STYLE: Record<string, { dot: string; text: string; ring: string }> = {
@@ -30,6 +29,16 @@ const STATUS_STYLE: Record<string, { dot: string; text: string; ring: string }> 
 const SOAP_LABEL: Record<keyof Soap, string> = {
   subjective: "Subjective", objective: "Objective", assessment: "Assessment", plan: "Plan",
 };
+
+// Colour the scenario badge by its outcome path so the list is scannable at a glance.
+function pathTone(path: string): string {
+  const p = path.toLowerCase();
+  if (/(review|reject|deny|escalat|grounding)/.test(p))
+    return "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300";
+  if (/(record|sign|approv)/.test(p))
+    return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300";
+  return "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400";
+}
 
 function finalVerdict(r: RunResult): { label: string; tone: "good" | "warn" | "neutral" } {
   if (r.status === "recorded") return { label: `Signed & recorded (${r.record_id})`, tone: "good" };
@@ -88,58 +97,61 @@ export default function ClinicalDocDemo() {
   const done = result && visible >= result.steps.length;
 
   return (
-    <div className="grid gap-6 md:grid-cols-[1fr_1.15fr]">
-      {/* ---- left: pick an encounter + run ---- */}
-      <div className="space-y-4">
-        <Card>
-          <h2 className="text-sm font-semibold text-slate-500">1 · Pick a synthetic encounter</h2>
-          <div className="mt-3 space-y-2">
-            {meta.cases.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => setSelected(c.id)}
-                className={`w-full rounded-xl border px-4 py-3 text-left transition ${
-                  selected === c.id
-                    ? "border-brand bg-brand/5 ring-1 ring-brand/30"
-                    : "border-slate-200 hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-slate-800 dark:text-slate-100">{c.title}</span>
-                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">{c.path}</span>
-                </div>
-                <div className="mt-1 text-xs text-slate-500">
-                  {c.specialty} · {c.sex}, {c.age_band}
-                </div>
-              </button>
-            ))}
+    <div className="grid gap-6 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+      {/* ---- left: sticky rail — pick an encounter + prominent Run ---- */}
+      <div className="space-y-4 self-start md:sticky md:top-6">
+        <Card className="!p-5">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Choose an encounter</h2>
+            <span className="text-[11px] text-slate-400">{meta.cases.length} cases · complex → simple</span>
           </div>
+          <div className="mt-3 space-y-2">
+            {meta.cases.map((c, i) => {
+              const active = selected === c.id;
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => setSelected(c.id)}
+                  className={`group flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
+                    active
+                      ? "border-brand bg-brand/5 ring-1 ring-brand/30"
+                      : "border-slate-200 hover:border-brand/40 hover:bg-slate-50 dark:border-slate-800 dark:hover:border-slate-700 dark:hover:bg-slate-800/40"
+                  }`}
+                >
+                  <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                    active ? "bg-brand text-white" : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                  }`}>{i + 1}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">{c.title}</span>
+                    <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${pathTone(c.path)}`}>{c.path}</span>
+                      <span className="text-[11px] text-slate-400">{c.specialty} · {c.sex}, {c.age_band}</span>
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <RunButton
+            loading={loading}
+            onClick={run}
+            disabled={!selected}
+            className="mt-4 w-full justify-center py-3 text-base"
+          >
+            {loading ? "Agents running…" : result ? "▸ Run again" : "▸ Run agent flow"}
+          </RunButton>
+          <p className="mt-2 text-center text-[11px] text-slate-400">5 agents · Intake → SOAP → Coder → Validator → Recorder</p>
         </Card>
 
         {activeCase && (
-          <Card>
-            <h2 className="text-sm font-semibold text-slate-500">2 · Encounter note (raw input)</h2>
+          <Card className="!p-5">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Encounter note (raw input)</h2>
             <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs italic text-slate-600 dark:bg-slate-950/50 dark:text-slate-300">
               {activeCase.raw}
             </p>
           </Card>
         )}
-
-        <div>
-          <RunButton loading={loading} onClick={run} disabled={!selected}>
-            {loading ? "Agents running…" : "Run agent flow"}
-          </RunButton>
-          {!meta.live && (
-            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-              Live LLM key not set — runs replay a <strong>prerecorded example</strong> of the same pipeline.
-            </p>
-          )}
-          {loading && (
-            <p className="mt-2 text-xs text-slate-400">
-              Agents draft and code live against {meta.model.split("/").pop()} — this can take 5–40 seconds.
-            </p>
-          )}
-        </div>
       </div>
 
       {/* ---- right: pipeline + results ---- */}
@@ -149,7 +161,7 @@ export default function ClinicalDocDemo() {
 
         {result && verdict && (
           <div
-            className={`rounded-xl px-4 py-3 text-center text-lg font-bold transition ${
+            className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-center text-lg font-bold transition ${
               verdict.tone === "good"
                 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
                 : verdict.tone === "warn"
@@ -157,14 +169,18 @@ export default function ClinicalDocDemo() {
                 : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
             } ${done ? "opacity-100" : "opacity-60"}`}
           >
-            {done ? verdict.label : "Running pipeline…"}
+            {done ? (
+              <>
+                <span aria-hidden>{verdict.tone === "good" ? "✓" : verdict.tone === "warn" ? "⚠" : "•"}</span>
+                <span>{verdict.label}</span>
+              </>
+            ) : (
+              <span className="inline-flex items-center gap-2 text-base font-semibold text-slate-500 dark:text-slate-300">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-brand" />
+                Running pipeline…
+              </span>
+            )}
           </div>
-        )}
-
-        {done && result?.sample && (
-          <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950/50">
-            {result.sample_reason || "Prerecorded example."} Structure and outcome match a real run of the pipeline.
-          </p>
         )}
 
         {result && (
@@ -184,7 +200,12 @@ export default function ClinicalDocDemo() {
 
         {result && (
           <Card>
-            <h2 className="text-sm font-semibold text-slate-500">Agent pipeline</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-500">Agent pipeline</h2>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] tabular-nums text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                {Math.min(visible, result.steps.length)}/{result.steps.length} steps
+              </span>
+            </div>
             <p className="mt-1 text-xs text-slate-400">Click a step to see what that agent received and returned.</p>
             <ol className="mt-4 space-y-2">
               {result.steps.slice(0, visible).map((s, i) => {
@@ -195,7 +216,7 @@ export default function ClinicalDocDemo() {
                   <li key={i}>
                     <button
                       onClick={() => hasIO && setOpenStep(open ? null : i)}
-                      className={`flex w-full gap-3 rounded-lg px-2 py-1 text-left ${hasIO ? "hover:bg-slate-50 dark:hover:bg-slate-800/50" : "cursor-default"}`}
+                      className={`flex w-full gap-3 rounded-lg px-2 py-1.5 text-left ${hasIO ? "hover:bg-slate-50 dark:hover:bg-slate-800/50" : "cursor-default"}`}
                     >
                       <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ring-4 ${st.dot} ${st.ring}`} />
                       <div className="flex-1">
@@ -271,12 +292,12 @@ export default function ClinicalDocDemo() {
               <pre className="mt-2 whitespace-pre-wrap font-sans text-sm text-slate-700 dark:text-slate-200">{asText(result.rationale)}</pre>
             </Card>
 
-            <div className="flex flex-wrap gap-4 text-xs">
+            <div className="flex flex-wrap items-center gap-4 text-xs">
               <button onClick={() => setShowAudit((v) => !v)} className="text-brand hover:underline">
                 {showAudit ? "Hide" : "Show"} audit trail ({result.audit_log.length})
               </button>
               <button onClick={() => setShowRedacted((v) => !v)} className="text-brand hover:underline">
-                {showRedacted ? "Hide" : "Show"} redacted encounter (what the LLM sees)
+                {showRedacted ? "Hide" : "Show"} redacted encounter (what the model sees)
               </button>
               <span className="ml-auto text-slate-400">{result.elapsed_ms} ms · {result.model.split("/").pop()}</span>
             </div>
@@ -302,14 +323,13 @@ export default function ClinicalDocDemo() {
         )}
 
         {!result && !error && (
-          <Card className="flex min-h-[16rem] items-center justify-center text-center">
-            <div>
-              <p className="text-sm text-slate-500">Pick an encounter and run the agent flow.</p>
-              <p className="mt-2 text-xs text-slate-400">
-                Intake → SOAP Writer → Coder → Validator → Sign-off → Recorder.<br />
-                Codes are validated against real code sets; nothing is recorded without a clinician sign-off.
-              </p>
-            </div>
+          <Card className="flex min-h-[22rem] flex-col items-center justify-center border-dashed text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand/10 text-2xl text-brand">▸</div>
+            <p className="mt-4 text-sm font-medium text-slate-600 dark:text-slate-300">Pick an encounter and hit <span className="text-brand">Run agent flow</span></p>
+            <p className="mt-2 max-w-sm text-xs text-slate-400">
+              Watch Intake → SOAP Writer → Coder → Validator → Sign-off → Recorder, step by step.
+              Codes are validated against real code sets; nothing is recorded without a clinician sign-off.
+            </p>
           </Card>
         )}
       </div>
