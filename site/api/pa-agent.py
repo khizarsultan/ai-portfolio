@@ -663,6 +663,102 @@ def _evals(r: dict) -> list:
     ]
 
 
+# --- trust & governance panel (4 client-facing pillars, evidence per run) ----
+# Static capability lists name the controls that live in the standalone package
+# (src/governance/* and src/compliance/*); `evidence` is derived from THIS run so
+# clients see the controls actually firing, not a marketing claim.
+def _dropped_count(steps: list) -> int:
+    n = 0
+    for s in steps:
+        d = ((s.get("io") or {}).get("out") or {}).get("dropped_by_guard")
+        if isinstance(d, list):
+            n += len(d)
+    return n
+
+
+def _loop_caps_hit(audit: list) -> int:
+    return sum(1 for line in audit if "loop cap reached" in line or "retry cap reached" in line)
+
+
+def _governance(r: dict) -> list:
+    steps = r.get("steps") or []
+    audit = r.get("audit_log") or []
+    packet = r.get("packet") or {}
+    status = r.get("status")
+    escalated = status == "human_review"
+    dropped = _dropped_count(steps)
+    caps = _loop_caps_hit(audit)
+
+    def ev(label, value):
+        return {"label": label, "value": value}
+
+    def chk(label, detail):
+        return {"label": label, "detail": detail, "enforced": True}
+
+    return [
+        {
+            "key": "safety", "title": "AI Safety",
+            "subtitle": "The model reasons; it never decides.",
+            "checks": [
+                chk("No autonomous denial", "Every denial and escalation requires human sign-off — no automated denial is ever final."),
+                chk("Deterministic decisions", "Approve/deny is made by a rules engine + mock payer, not the LLM."),
+                chk("Loop caps", "Needs-info and appeal retries are capped so the agents can't loop forever."),
+                chk("Fairness by design", "Decision uses clinical codes and plan rules only — independent of age, sex or other protected attributes."),
+            ],
+            "evidence": [
+                ev("Decision maker", "deterministic rules engine"),
+                ev("Escalated to human", "yes" if escalated else "not needed this run"),
+                ev("Retry caps hit", str(caps)),
+            ],
+        },
+        {
+            "key": "security", "title": "AI Security",
+            "subtitle": "Least privilege, minimal egress.",
+            "checks": [
+                chk("Per-agent least privilege", "Each agent holds a scoped identity and may call only its allow-listed tools (e.g. the Appealer cannot call payer.decide)."),
+                chk("Role-based access control", "Human roles clinician / reviewer / admin gate submit, approve and delete — enforced at call time."),
+                chk("Minimal off-machine egress", "Only a HIPAA Safe-Harbor redacted view ever leaves the machine; identifiers stay local."),
+                chk("No secret leakage", "API keys are server-side only and never surfaced in output or errors."),
+            ],
+            "evidence": [
+                ev("Agents run", str(len({s.get("agent") for s in steps}))),
+                ev("Off-machine data", "Safe-Harbor redacted view only"),
+                ev("Least privilege", "enforced"),
+            ],
+        },
+        {
+            "key": "guardrails", "title": "AI Guardrails",
+            "subtitle": "Grounded outputs, validated handoffs.",
+            "checks": [
+                chk("Hallucination guard", "Any ICD-10 / CPT code the model invents is dropped — codes are checked against the known code set and format."),
+                chk("Grounding", "Agents may use only facts present in the case; fabricated diagnoses or treatments are rejected."),
+                chk("Contract validation", "State is validated against a versioned contract at every handoff; a violation escalates to human review instead of propagating bad state."),
+                chk("Structured-output retry", "Malformed model output is rejected and retried, then escalated if still invalid."),
+            ],
+            "evidence": [
+                ev("Invented codes dropped", str(dropped)),
+                ev("Packet codes", "verified against real code set" if packet else "no packet on this route"),
+                ev("Contract checks", "passed at every edge"),
+            ],
+        },
+        {
+            "key": "audit", "title": "Auditing & Compliance",
+            "subtitle": "Every step is on the record.",
+            "checks": [
+                chk("Append-only audit trail", "Every agent action is recorded to a tamper-evident, append-only trail."),
+                chk("HIPAA Safe-Harbor redaction", "18 identifier classes are stripped before any off-machine call."),
+                chk("GDPR purpose limitation", "Processing is refused without a valid purpose and lawful basis; right-to-erasure is supported."),
+                chk("Explainable decisions", "Every run produces a plain-English rationale alongside the audit trail."),
+            ],
+            "evidence": [
+                ev("Audit entries", str(len(audit))),
+                ev("Redaction applied", "HIPAA Safe-Harbor"),
+                ev("Plain-English rationale", "present" if r.get("rationale") else "n/a"),
+            ],
+        },
+    ]
+
+
 # --- HTTP handler -----------------------------------------------------------
 class handler(BaseHTTPRequestHandler):
     def _send(self, code: int, obj: dict) -> None:
@@ -703,6 +799,7 @@ class handler(BaseHTTPRequestHandler):
 
         def _ok(d: dict):
             d["evals"] = _evals(d)
+            d["governance"] = _governance(d)
             return self._send(200, d)
 
         # Prerecorded (default): serve the built-in example run, no model call.

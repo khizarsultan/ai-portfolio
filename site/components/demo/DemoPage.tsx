@@ -11,7 +11,7 @@ export default function DemoPage({ slug, wide, children }: { slug: string; wide?
   return (
     <>
       <Nav />
-      <main className={`mx-auto ${wide ? "max-w-7xl" : "max-w-5xl"} px-6 py-12`}>
+      <main className={`mx-auto ${wide ? "max-w-7xl" : "max-w-5xl"} px-6 py-8`}>
         <Link href={`/projects/${slug}`} className="text-sm text-slate-500 hover:text-brand">
           ← {p ? p.title : "Project"}
         </Link>
@@ -26,7 +26,7 @@ export default function DemoPage({ slug, wide, children }: { slug: string; wide?
             <p className="mt-2 text-lg text-slate-600 dark:text-slate-300">{p.tagline}</p>
           </>
         )}
-        <div className="mt-8">{children}</div>
+        <div className="mt-6">{children}</div>
       </main>
       <Footer />
     </>

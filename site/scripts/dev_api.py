@@ -16,7 +16,7 @@ import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 API_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "api")
-PORT = 8787
+PORT = int(os.getenv("DEV_API_PORT", "8787"))
 
 # Load every api/*.py and map its route to the module's `handler` class.
 ROUTES: dict[str, type] = {}

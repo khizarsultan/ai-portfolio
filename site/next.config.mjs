@@ -6,7 +6,8 @@ const nextConfig = {
   // returns [] so Vercel serves the real serverless functions untouched.
   async rewrites() {
     if (process.env.NODE_ENV === "production") return [];
-    return [{ source: "/api/:path*", destination: "http://127.0.0.1:8787/api/:path*" }];
+    const port = process.env.DEV_API_PORT || "8787";
+    return [{ source: "/api/:path*", destination: `http://127.0.0.1:${port}/api/:path*` }];
   },
 };
 

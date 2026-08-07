@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { Card, RunButton, ErrorNote, DevHint, EvalScores, EvalMetric, getJSON, postJSON } from "./ui";
 import ClinicalFlowGraph from "./ClinicalFlowGraph";
+import GovernancePanel, { type Pillar } from "./GovernancePanel";
 
 type CaseInfo = {
   id: string; title: string; path: string; specialty: string;
@@ -16,7 +17,7 @@ type RunResult = {
   soap: Soap | null; codes: Code[] | null; flags: string[]; confidence: number | null;
   signed_off: boolean; signer: string | null; record_id: string | null;
   status: string; steps: Step[]; audit_log: string[]; rationale: string;
-  redacted_view: Record<string, unknown>; evals?: EvalMetric[]; model: string; elapsed_ms: number;
+  redacted_view: Record<string, unknown>; evals?: EvalMetric[]; governance?: Pillar[]; model: string; elapsed_ms: number;
 };
 
 const STATUS_STYLE: Record<string, { dot: string; text: string; ring: string }> = {
@@ -72,7 +73,7 @@ export default function ClinicalDocDemo() {
         if (v >= result.steps.length) { clearInterval(t); return v; }
         return v + 1;
       });
-    }, 450);
+    }, 250);
     return () => clearInterval(t);
   }, [result]);
 
@@ -105,14 +106,25 @@ export default function ClinicalDocDemo() {
             <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Choose an encounter</h2>
             <span className="text-[11px] text-slate-400">{meta.cases.length} cases · complex → simple</span>
           </div>
-          <div className="mt-3 space-y-2">
+
+          <RunButton
+            loading={loading}
+            onClick={run}
+            disabled={!selected}
+            className="mt-3 w-full justify-center py-3 text-base"
+          >
+            {loading ? "Agents running…" : result ? "▸ Run again" : "▸ Run agent flow"}
+          </RunButton>
+          <p className="mt-1.5 text-center text-[11px] text-slate-400">Runs the selected encounter below · 5 agents</p>
+
+          <div className="mt-4 space-y-1.5">
             {meta.cases.map((c, i) => {
               const active = selected === c.id;
               return (
                 <button
                   key={c.id}
                   onClick={() => setSelected(c.id)}
-                  className={`group flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
+                  className={`group flex w-full items-start gap-3 rounded-xl border px-3 py-2 text-left transition ${
                     active
                       ? "border-brand bg-brand/5 ring-1 ring-brand/30"
                       : "border-slate-200 hover:border-brand/40 hover:bg-slate-50 dark:border-slate-800 dark:hover:border-slate-700 dark:hover:bg-slate-800/40"
@@ -132,16 +144,6 @@ export default function ClinicalDocDemo() {
               );
             })}
           </div>
-
-          <RunButton
-            loading={loading}
-            onClick={run}
-            disabled={!selected}
-            className="mt-4 w-full justify-center py-3 text-base"
-          >
-            {loading ? "Agents running…" : result ? "▸ Run again" : "▸ Run agent flow"}
-          </RunButton>
-          <p className="mt-2 text-center text-[11px] text-slate-400">5 agents · Intake → SOAP → Coder → Validator → Recorder</p>
         </Card>
 
         {activeCase && (
@@ -251,6 +253,8 @@ export default function ClinicalDocDemo() {
 
         {done && result && (
           <>
+            {result.governance && <GovernancePanel pillars={result.governance} />}
+
             {result.soap && (
               <Card>
                 <h2 className="text-sm font-semibold text-slate-500">SOAP note (drafted by the agents)</h2>
